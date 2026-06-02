@@ -1,0 +1,14 @@
+langgraph
+langchain
+ipython
+langchain_openai
+langchain_community
+dotenv
+typing
+chromadb
+langchain_chroma
+httpx
+langchain_core
+langchain_groq
+python-dotenv
+ddgs
