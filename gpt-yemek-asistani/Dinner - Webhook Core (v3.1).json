@@ -1,0 +1,696 @@
+{
+  "name": "Dinner - Webhook Core (v3.1)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "a0c477c1-3293-4452-8aec-4e7ab66ad56d",
+      "name": "Telegram Trigger (webhook)",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1856,
+        240
+      ],
+      "webhookId": "25a67f6f-42bc-4f22-a04c-45be2cd8f21b",
+      "credentials": {
+        "telegramApi": {
+          "id": "jdNguUXrSr0N313b",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\n\n// ---- init state ----\nif (!sd.history) sd.history = [];\nif (!sd.rules) sd.rules = \"Genel: Sağlıklı ev yemeği, dengeli beslenme. Bir hafta içinde farklı protein kaynakları (tavuk/balık/kırmızı et/bakliyat/vejetaryen) dengeli dağılsın. Kızartma minimum.\";\nif (!sd.banned) sd.banned = [];\nif (!sd.pending) sd.pending = {};\nif (!sd.favorites) sd.favorites = [\n  'Mercimek çorbası',\n  'Tavuk sote',\n  'Zeytinyağlı taze fasulye',\n  'Nohut yemeği',\n  'Fırında somon',\n  'Sebzeli bulgur pilavı',\n  'Kıymalı kabak yemeği',\n  'Mantı'\n];\nif (!sd.weekPlan) sd.weekPlan = null;\n\n// stale lock cleanup\nif (sd.ollamaBusy && sd.ollamaBusySince && (Date.now() - sd.ollamaBusySince) > 180000) {\n  sd.ollamaBusy = false;\n  sd.ollamaBusySince = null;\n}\n\n// pending cleanup (10 min)\nconst now = Date.now();\nObject.keys(sd.pending || {}).forEach(cid => {\n  if (sd.pending[cid] && sd.pending[cid].since && (now - sd.pending[cid].since) > 600000) {\n    delete sd.pending[cid];\n  }\n});\n\n// ---- normalize incoming update from Telegram Trigger ----\nconst u = $json;\n\nif (u.callback_query) {\n  return [{\n    json: {\n      kind: 'callback',\n      chatId: String(u.callback_query.message.chat.id),\n      text: '',\n      callbackData: u.callback_query.data || '',\n      callbackQueryId: u.callback_query.id || ''\n    }\n  }];\n}\n\nif (u.message) {\n  return [{\n    json: {\n      kind: 'message',\n      chatId: String(u.message.chat.id),\n      text: (typeof u.message.text === 'string') ? u.message.text : '',\n      callbackData: '',\n      callbackQueryId: ''\n    }\n  }];\n}\n\nreturn [{ json: { kind: 'unknown', chatId: '', text: '', callbackData: '', callbackQueryId: '' } }];\n"
+      },
+      "id": "b188fed3-c794-45ed-a2be-bf6aa02a44ee",
+      "name": "Init + Normalize (webhook)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1616,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.kind }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "callback"
+            },
+            {
+              "value2": "message"
+            }
+          ]
+        }
+      },
+      "id": "4acfd77b-d3ab-4539-8b96-969b2684a67a",
+      "name": "Switch kind",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        -1360,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst chatId = String($json.chatId);\n\nif (chatId !== \"-4929983051\") return [{ json: { action: 'ignore' } }];\n\nconst data = $json.callbackData || '';\nconst m = data.match(/^mode:(1|2|3)$/);\nif (!m) return [{ json: { action: 'noop' } }];\n\nconst mode = m[1];\nif (mode === '1') {\n  sd.pending[chatId] = { type: 'ingredients', since: Date.now() };\n  return [{ json: { action: 'ask_ingredients', chatId } }];\n}\nreturn [{ json: { action: 'generate', chatId, mode } }];"
+      },
+      "id": "3819f5a6-1428-4537-8c45-6e7262fbdfd3",
+      "name": "Handle callback (mode 1/2/3)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst chatId = String($json.chatId);\nconst rawText = $json.text ?? '';\nconst text = (typeof rawText === 'string' ? rawText : String(rawText ?? '')).trim();\nif (!text) return [{ json: { action: 'noop' } }];\n\nif (chatId !== \"-4929983051\") return [{ json: { action: 'ignore' } }];\n\n// FIX: Süresi dolmuş pending'leri temizle (10 dakika)\nconst now = Date.now();\nObject.keys(sd.pending || {}).forEach(cid => {\n  if (sd.pending[cid] && sd.pending[cid].since && (now - sd.pending[cid].since) > 600000) {\n    delete sd.pending[cid];\n  }\n});\n\n// /help komutu (YENİ)\nif (text.startsWith('/help') || text === '?') {\n  const helpMsg = `🤖 <b>Akşam Yemeği Botu - Komutlar</b>\\n\\n` +\n    `<b>🍽️ Öneri:</b>\\n` +\n    `• <code>2</code> veya <code>3</code> — Direkt öneri (2=normal, 3=hafif)\\n` +\n    `• <code>1</code> — Evdeki malzemelere göre öneri\\n\\n` +\n    `<b>📅 Haftalık Plan:</b>\\n` +\n    `• /plan — Yeni 7 günlük plan oluştur\\n` +\n    `• /plan goster — Mevcut planı göster\\n` +\n    `• /plan sil — Planı sıfırla\\n` +\n    `• /plan_json — Planı JSON olarak göster\\n\\n` +\n    `<b>⭐ Favoriler:</b>\\n` +\n    `• /favoriler — Favori listesi\\n• /tarif &lt;yemek&gt; — İstediğin yemeğin tarifini getir\\n` +\n    `• /fav_ekle &lt;yemek&gt; — Favoriye ekle\\n` +\n    `• /fav_sil &lt;yemek&gt; — Favoriden sil\\n\\n` +\n    `<b>⚙️ Yönetim:</b>\\n` +\n    `• /history — Son 7 öneri\\n` +\n    `• /rules — Mevcut kuralları gör\\n` +\n    `• /rules &lt;yeni kurallar&gt; — Kuralları güncelle\\n` +\n    `• /ban &lt;yemek&gt; — Yasakla\\n` +\n    `• /unban &lt;yemek&gt; — Yasağı kaldır\\n` +\n    `• /reset — Tüm hafızayı sıfırla`;\n  return [{ json: { action: 'reply_html', chatId, message: helpMsg } }];\n}\n\nif (text.startsWith('/reset')) {\n  sd.history = [];\n  sd.banned = [];\n  sd.rules = \"Genel: Sağlıklı ev yemeği, dengeli beslenme. Bir hafta içinde farklı protein kaynakları (tavuk/balık/kırmızı et/bakliyat/vejetaryen) dengeli dağılsın. Kızartma minimum.\";\n  sd.pending = {};\n  sd.ollamaBusy = false;\n  sd.ollamaBusySince = null;\n  return [{ json: { action: 'reply', chatId, message: '✅ Hafıza sıfırlandı (history/rules/ban/pending/lock).' } }];\n}\n\nif (text.startsWith('/history')) {\n  const h = (sd.history || []).slice(-7)\n    .map((x,i)=>`${i+1}) ${x.date} • ${x.title} (${x.proteinTag||'protein?'})`)\n    .join('\\n');\n  return [{ json: { action: 'reply', chatId, message: h ? `📌 Son öneriler:\\n${h}` : 'Henüz geçmiş yok.' } }];\n}\n\nif (text.startsWith('/rules')) {\n  const newRules = text.replace('/rules','').trim();\n  if (!newRules) {\n    return [{ json: { action: 'reply', chatId, message: `Mevcut kurallar:\\n${sd.rules}\\n\\nGüncellemek için: /rules <yeni kurallar>` } }];\n  }\n  sd.rules = newRules;\n  return [{ json: { action: 'reply', chatId, message: '✅ Kurallar güncellendi.' } }];\n}\n\nif (text.startsWith('/ban')) {\n  const item = text.replace('/ban','').trim().toLowerCase();\n  if (!item) return [{ json: { action: 'reply', chatId, message: 'Kullanım: /ban pizza' } }];\n  if (!sd.banned.includes(item)) sd.banned.push(item);\n  return [{ json: { action: 'reply', chatId, message: `⛔️ Yasaklara eklendi: ${item}` } }];\n}\n\nif (text.startsWith('/unban')) {\n  const item = text.replace('/unban','').trim().toLowerCase();\n  sd.banned = (sd.banned || []).filter(x => x !== item);\n  return [{ json: { action: 'reply', chatId, message: `✅ Yasaktan çıkarıldı: ${item}` } }];\n}\n\nif (text.startsWith('/fav_ekle') || text.startsWith('/favori_ekle')) {\n  const item = text.replace('/fav_ekle','').replace('/favori_ekle','').trim();\n  if (!item) return [{ json: { action: 'reply', chatId, message: 'Kullanım: /fav_ekle <yemek ismi>' } }];\n  const norm = item.toLowerCase();\n  const exists = (sd.favorites||[]).some(x => String(x).toLowerCase() === norm);\n  if (!exists) sd.favorites.push(item);\n  return [{ json: { action: 'reply', chatId, message: exists ? 'ℹ️ Zaten favorilerde.' : `✅ Favorilere eklendi: ${item}` } }];\n}\n\nif (text.startsWith('/fav_sil') || text.startsWith('/favori_sil')) {\n  const item = text.replace('/fav_sil','').replace('/favori_sil','').trim().toLowerCase();\n  if (!item) return [{ json: { action: 'reply', chatId, message: 'Kullanım: /fav_sil <yemek ismi>' } }];\n  const before = (sd.favorites||[]).length;\n  sd.favorites = (sd.favorites||[]).filter(x => String(x).toLowerCase() !== item);\n  const after = sd.favorites.length;\n  return [{ json: { action: 'reply', chatId, message: before === after ? 'ℹ️ Bulunamadı.' : `✅ Favorilerden silindi: ${item}` } }];\n}\n\nif (text.startsWith('/fav_liste') || text.startsWith('/favoriler')) {\n  const list = (sd.favorites||[]);\n  const msg = list.length ? ('⭐ Favoriler:\\n' + list.map((x,i)=>`${i+1}) ${x}`).join('\\n')) : 'Favori listesi boş.';\n  return [{ json: { action: 'reply', chatId, message: msg } }];\n}\n\nif (text.startsWith('/tarif')) {\n  const dish = text.replace('/tarif','').trim();\n  if (!dish) return [{ json: { action: 'reply', chatId, message: 'Kullanım: /tarif <yemek adı>\\nÖrnek: /tarif karnıyarık' } }];\n  return [{ json: { action: 'generate', chatId, mode: '2', forcedDish: dish } }];\n}\n\nif (text.startsWith('/plan_json')) {\n  if (!sd.weekPlan) return [{ json: { action: 'reply', chatId, message: 'Henüz plan yok. /plan ile oluştur.' } }];\n  return [{ json: { action: 'reply', chatId, message: JSON.stringify(sd.weekPlan.plan, null, 2) } }];\n}\n\nif (text.startsWith('/plan')) {\n  const arg = text.replace('/plan','').trim().toLowerCase();\n  if (arg === 'sil' || arg === 'reset') {\n    sd.weekPlan = null;\n    return [{ json: { action: 'reply', chatId, message: '✅ Haftalık plan sıfırlandı.' } }];\n  }\n  if (arg === 'goster' || arg === 'show') {\n    if (!sd.weekPlan) return [{ json: { action: 'reply', chatId, message: 'Henüz plan yok. Yeni plan için /plan yaz.' } }];\n    const lines = sd.weekPlan.plan.map((d,i)=>`${i+1}) ${d.date} • ${d.title} (${d.proteinTag})`).join('\\n');\n    return [{ json: { action: 'reply', chatId, message: `📅 Mevcut 7 günlük plan:\\n${lines}` } }];\n  }\n  return [{ json: { action: 'plan', chatId } }];\n}\n\n// pending kontrolü\nconst pend = sd.pending[chatId];\n\n// Plan seçimi bekleniyor\nif (pend && pend.type === 'plan_selection') {\n  const nums = text.split(/[\\s,]+/).map(n => parseInt(n)).filter(n => !isNaN(n));\n  if (nums.length < 7) {\n    return [{ json: { action: 'reply', chatId, message: '⚠️ Lütfen tam olarak 7 yemek numarası yaz.\\nÖrnek: 1 3 5 7 9 11 13' } }];\n  }\n  const suggestions = (sd.pendingPlanSuggestions || {}).suggestions || [];\n  const start = (sd.pendingPlanSuggestions || {}).start || '';\n  const selected = nums.slice(0, 7).map((n, i) => {\n    const found = suggestions.find(s => s.id === n);\n    if (!found) return null;\n    const dt = new Date(new Date(start).getTime() + i * 86400000);\n    const yyyy = dt.getFullYear();\n    const mm = String(dt.getMonth() + 1).padStart(2, '0');\n    const dd = String(dt.getDate()).padStart(2, '0');\n    return { date: yyyy + '-' + mm + '-' + dd, title: found.title, proteinTag: found.proteinTag, prepMinutes: 30, lightLevel: 'orta' };\n  }).filter(Boolean);\n  if (selected.length < 7) {\n    return [{ json: { action: 'reply', chatId, message: '⚠️ Bazı numaralar listede yok. Tekrar dene.' } }];\n  }\n  delete sd.pending[chatId];\n  delete sd.pendingPlanSuggestions;\n  sd.weekPlan = { generatedAt: Date.now(), startDate: start, plan: selected };\n\n  function escHtml(str) {\n    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\n  }\n  const lines = selected.map((d, i) =>\n    (i+1) + ') ' + escHtml(d.date) + ' • <b>' + escHtml(d.title) + '</b> (' + escHtml(d.proteinTag) + ')'\n  ).join('\\n');\n  const msg = '📅 <b>7 Günlük Plan</b> (başlangıç ' + escHtml(start) + ')\\n\\n' + lines + '\\n\\nJSON görmek için: /plan_json\\nFavoriler için: /favoriler';\n  return [{ json: { action: 'reply_html', chatId, message: msg } }];\n}\n\n// Ingredients bekleniyor\nif (pend && pend.type === 'ingredients') {\n  delete sd.pending[chatId];\n  return [{ json: { action: 'generate', chatId, mode: '1', ingredients: text } }];\n}\n\nif (['1','2','3'].includes(text)) {\n  if (text === '1') {\n    sd.pending[chatId] = { type: 'ingredients', since: Date.now() };\n    return [{ json: { action: 'ask_ingredients', chatId } }];\n  }\n  return [{ json: { action: 'generate', chatId, mode: text } }];\n}\n\nreturn [{ json: { action: 'noop' } }];"
+      },
+      "id": "16373478-feaf-49cd-8d1c-71f13e172217",
+      "name": "Handle message (commands / ingredients / 1-2-3)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.action }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "ask_ingredients"
+            },
+            {
+              "value2": "generate"
+            },
+            {
+              "value2": "reply"
+            },
+            {
+              "value2": "plan"
+            },
+            {
+              "value2": "reply_html"
+            }
+          ]
+        }
+      },
+      "id": "ec1f557e-40a5-4c43-8740-7ee402659bd4",
+      "name": "Switch action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8779232468:AAEEnYBXUU_4X2etXw6R8tZ4GF0XmwcKLjk/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"-4929983051\",\n  \"text\": \"Evde hangi malzemeler var? (virgülle yaz: örn. tavuk, yoğurt, makarna, domates, soğan)\\n\\nHemen 3 kişilik öneri hazırlayayım 🙂\"\n}",
+        "options": {}
+      },
+      "id": "45cc0219-e30c-44dd-9c15-eb1968261281",
+      "name": "Telegram: ask ingredients",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8779232468:AAEEnYBXUU_4X2etXw6R8tZ4GF0XmwcKLjk/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"-4929983051\",\n  \"text\": {{ JSON.stringify($json.message) }}\n}",
+        "options": {}
+      },
+      "id": "0680f856-f57f-4a31-9566-fde080583bec",
+      "name": "Telegram: send reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -208,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8779232468:AAEEnYBXUU_4X2etXw6R8tZ4GF0XmwcKLjk/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"-4929983051\",\n  \"text\": {{ JSON.stringify($json.message) }},\n  \"parse_mode\": \"HTML\"\n}",
+        "options": {}
+      },
+      "id": "324d4dd6-0a5f-4756-a5de-928a639c470a",
+      "name": "Telegram: send reply HTML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -208,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst mode = String($json.mode);\nconst rawIng = $json.ingredients ?? '';\nconst ingredients = (typeof rawIng === 'string' ? rawIng : String(rawIng ?? '')).trim();\nconst forcedDish = $json.forcedDish || null;\n\nconst now = new Date();\nconst yyyy = now.getFullYear();\nconst mm = String(now.getMonth() + 1).padStart(2, '0');\nconst dd = String(now.getDate()).padStart(2, '0');\nconst today = yyyy + '-' + mm + '-' + dd;\n\nconst sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);\nconst history = (sd.history || []).slice(-14);\nconst banned = (sd.banned || []);\nconst favorites = (sd.favorites || []);\n\nconst recentTitles = history\n  .filter(h => h.date && new Date(h.date) >= sevenDaysAgo)\n  .map(h => String(h.title || '').toLowerCase());\n\nconst candidateFavs = favorites.filter(f => !recentTitles.includes(String(f).toLowerCase()));\n\nlet modeDesc;\nif (forcedDish) {\n  modeDesc = 'Haftalik plandan tarif: ' + forcedDish;\n} else if (mode === '1') {\n  modeDesc = 'Evdeki malzemelere gore';\n} else if (mode === '3') {\n  modeDesc = 'Hafif';\n} else {\n  modeDesc = 'Direkt oner';\n}\n\nconst favStr = candidateFavs.length ? candidateFavs.join(', ') : (favorites.length ? favorites.join(', ') : 'yok');\nconst banStr = banned.length ? banned.join(', ') : 'yok';\nconst histStr = history.length ? history.map(h => h.date + ':' + h.title).join(' | ') : 'yok';\nconst ingLine = mode === '1' ? ('EVDEKİ MALZEMELER: ' + ingredients) : '';\nconst forcedLine = forcedDish ? ('ZORUNLU YEMEK: Tarifi kesinlikle \"' + forcedDish + '\" olacak, baska yemek onerme.') : '';\n\nconst prompt = [\n  'Sen profesyonel, pratik ve cozum odakli bir Turk mutfagi sefisin. Gorev: 3 kisilik aile icin dengeli ve hizli aksam yemegi oner.',\n  '',\n  'KURALLAR:',\n  '- Her yemek hazirlik dahil en fazla 35 dakikada servis edilebilir olmali.',\n  '- Haftalik protein dengesi: kirmizi et, beyaz et ve zeytinyagli/baklagil dengeli dagilsin.',\n  '- Airfryer yoktur; tencere, tava, firin kullanilabilir.',\n  '- Alisveris haftalik yapilir; evde bulunmasi muhtemel temel malzemelere oncelik ver.',\n  '- Her tarifde MUTLAKA baharat kullan (kimyon, pul biber, karabiber, nane, kekik, sarimsak vb.). Baharatsiz tarif kabul edilmez.',\n  '- Tarif basligi (title) sadece tek bir yemegi tanimlamali, \"ve Pilav\" veya \"ve Salata\" gibi ek yemek adlari ekleme.',\n  '',\n  'FAVORİLER (oncelik, son 7 gunde yapilmamis): ' + favStr,\n  'YASAKLILAR: ' + banStr,\n  'SON ONERİLER (son 14): ' + histStr,\n  '',\n  'MOD: ' + modeDesc,\n  ingLine,\n  forcedLine,\n  '',\n  'CIKTI KURALLARI:',\n  '- Sadece asagidaki JSON semasina uygun gecerli JSON dondurun, baska hicbir sey yazma.',\n  '- Tum Turkce karakterleri (s=ş, g=ğ, u=ü, o=ö, c=ç, i=ı) OLDUGU GIBI yaz, unicode escape kullanma.',\n  '{',\n  '  \"title\": \"...\",',\n  '  \"proteinTag\": \"tavuk|balik|kirmizi_et|bakliyat|vejetaryen|karisik\",',\n  '  \"prepMinutes\": 30,',\n  '  \"ingredients\": [\"3 kisilik olculerle yaz\", \"baharat miktarlarini da ekle\"],',\n  '  \"steps\": [\"adim1\", \"adim2\", \"adim3\", \"adim4\", \"adim5\", \"adim6\"],',\n  '  \"nutritionNote\": \"kisa ve dogru besin notu\",',\n  '  \"lightLevel\": \"hafif|orta\"',\n  '}'\n].join('\\n');\n\nreturn [{ json: { today, mode, prompt, forcedDish } }];"
+      },
+      "id": "6dd95e44-a1e5-41af-9fc2-409cff50da9f",
+      "name": "Build prompt (Ollama)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\n// FIX: Busy lock — timestamp ile birlikte set et\nif (sd.ollamaBusy) {\n  return [{ json: { skip: true } }];\n}\nsd.ollamaBusy = true;\nsd.ollamaBusySince = Date.now();\nreturn [{ json: { skip: false } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        240
+      ],
+      "id": "dd64d5ce-c38f-4572-a2b1-861aaab48631",
+      "name": "Ollama: Lock"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2e569e39-8f4c-488c-8a79-ebf3cad138e8",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        208,
+        240
+      ],
+      "id": "bce17763-8214-4a21-b0e4-70e2cf9c92f9",
+      "name": "If: skip busy?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "gemma3:12b"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $('Build prompt (Ollama)').item.json.prompt }}"
+            },
+            {
+              "name": "stream",
+              "value": "={{ false }}"
+            },
+            {
+              "name": "options",
+              "value": "={{ { \"temperature\": 0.6, \"num_predict\": 900, \"top_p\": 0.9, \"repeat_penalty\": 1.1 } }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {
+          "response": {},
+          "timeout": 120000
+        }
+      },
+      "id": "016707ae-5b04-4f8a-90c4-c63539e8dac2",
+      "name": "Ollama: generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        448,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nsd.ollamaBusy = false;\nsd.ollamaBusySince = null;\n\nconst today = $node[\"Build prompt (Ollama)\"].json.today;\nconst mode = $node[\"Build prompt (Ollama)\"].json.mode;\n\nlet candidate = $json.response ?? $json.body?.response ?? '';\ncandidate = String(candidate);\n\n// Unicode escape'leri decode et (\\u015f gibi literal string olarak geldiyse)\n// JSON.parse zaten handle eder, ama raw string olarak geldiyse:\ntry {\n  candidate = candidate.replace(/\\\\u([0-9a-fA-F]{4})/g, (_, hex) =>\n    String.fromCharCode(parseInt(hex, 16))\n  );\n} catch(e) {}\n\ncandidate = candidate\n  .replace(/```json/gi, '```')\n  .replace(/```/g, '')\n  .trim();\n\nfunction extractFirstJsonObject(str) {\n  const start = str.indexOf('{');\n  if (start === -1) return null;\n  let depth = 0;\n  let inString = false;\n  let escape = false;\n  for (let i = start; i < str.length; i++) {\n    const ch = str[i];\n    if (inString) {\n      if (escape) { escape = false; }\n      else if (ch === '\\\\') { escape = true; }\n      else if (ch === '\"') { inString = false; }\n      continue;\n    }\n    if (ch === '\"') { inString = true; continue; }\n    if (ch === '{') depth++;\n    if (ch === '}') depth--;\n    if (depth === 0) return str.slice(start, i + 1);\n  }\n  return null;\n}\n\nconst jsonText = extractFirstJsonObject(candidate);\nif (!jsonText) {\n  throw new Error('JSON objesi bulunamadı. İlk 400: ' + candidate.slice(0, 400));\n}\n\nlet obj;\ntry {\n  obj = JSON.parse(jsonText);\n} catch (e) {\n  throw new Error('JSON parse başarısız. İlk 400: ' + jsonText.slice(0, 400));\n}\n\nif (!sd.history) sd.history = [];\nsd.history.push({ date: today, title: obj.title, proteinTag: obj.proteinTag, mode });\nsd.history = sd.history.slice(-30);\n\nreturn [{ json: { obj } }];"
+      },
+      "id": "853dbff6-3ea8-44d6-a6eb-461540fe0a6c",
+      "name": "Parse + Store history",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nsd.ollamaBusy = false;\nsd.ollamaBusySince = null;\nconst errMsg = $json.error?.message || $json.message || 'Bilinmeyen hata';\nreturn [{ json: { message: '⚠️ Bir sorun oluştu, lütfen tekrar dene.\\n(' + errMsg.slice(0,100) + ')' } }];"
+      },
+      "id": "1af53a1d-81f3-4787-9d61-021aa09a38a8",
+      "name": "Error: release lock + notify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const o = $json.obj;\n\nfunction escHtml(str) {\n  return String(str || '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;');\n}\n\nconst ing = (o.ingredients || []).map(x => '• ' + escHtml(x)).join('\\n');\nconst steps = (o.steps || []).map((x, i) => (i + 1) + ') ' + escHtml(x)).join('\\n');\n\nconst msg = '🍽️ <b>' + escHtml(o.title) + '</b>\\n\\n' +\n  '🏷️ Protein: <b>' + escHtml(o.proteinTag) + '</b> | Hafiflik: <b>' + escHtml(o.lightLevel || 'orta') + '</b>\\n' +\n  '⏱️ Hazırlık: <b>' + escHtml(String(o.prepMinutes)) + ' dk</b>\\n\\n' +\n  '🧺 <b>Malzemeler:</b>\\n' + (ing || '• (liste yok)') + '\\n\\n' +\n  '👩‍🍳 <b>Yapılış:</b>\\n' + (steps || '(adım yok)') + '\\n\\n' +\n  '🥗 <i>Beslenme notu:</i> ' + escHtml(o.nutritionNote || '');\n\nreturn [{ json: { text: msg } }];"
+      },
+      "id": "0ceecffd-b529-4293-829f-65d1112e9e8a",
+      "name": "Format message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8779232468:AAEEnYBXUU_4X2etXw6R8tZ4GF0XmwcKLjk/sendMessage",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "-4929983051"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "name": "parse_mode",
+              "value": "HTML"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ecfc9cd4-cfa3-4323-b2bb-aefe9764da6e",
+      "name": "Telegram: send suggestion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1168,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\n\nconst now = new Date();\nconst day = now.getDay();\nconst daysUntilMon = (day === 1) ? 0 : ((8 - day) % 7);\nconst startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilMon);\nconst yyyy = startDate.getFullYear();\nconst mm = String(startDate.getMonth()+1).padStart(2,'0');\nconst dd = String(startDate.getDate()).padStart(2,'0');\nconst start = yyyy + '-' + mm + '-' + dd;\n\nif (sd.ollamaBusy) {\n  return [{ json: { action: 'reply', chatId: $json.chatId, message: '⏳ Şu an başka bir istek işleniyor, lütfen biraz bekle.' } }];\n}\nsd.ollamaBusy = true;\nsd.ollamaBusySince = Date.now();\n\nconst favorites = (sd.favorites || []);\nconst history = (sd.history || []).slice(-21);\nconst banned = (sd.banned || []);\n\nconst now2 = new Date();\nconst twentyOneDaysAgo = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate() - 21);\nconst recentTitles = history\n  .filter(h => h.date && new Date(h.date) >= twentyOneDaysAgo)\n  .map(h => String(h.title || '').toLowerCase());\nconst candidateFavs = favorites.filter(f => !recentTitles.includes(String(f).toLowerCase()));\n\nconst favStr = candidateFavs.length ? candidateFavs.join(', ') : (favorites.length ? favorites.join(', ') : 'yok');\nconst banStr = banned.length ? banned.join(', ') : 'yok';\nconst histStr = history.length ? history.map(h => h.date + ':' + h.title).join(' | ') : 'yok';\n\nconst prompt = [\n  'Sen bir Türk mutfağı şefisin. Görev: kullanıcıya seçim yapması için 14 yemek adı öner.',\n  '',\n  'KURALLAR:',\n  '- Öneriler çeşitli olsun: tavuk, balık, kırmızı et, bakliyat, vejetaryen karışık dağılsın.',\n  '- Favorilerden mümkün olduğunca çok öner (son 21 günde yapılmamış olanlar öncelikli).',\n  '- Yasaklı yemekleri önerme.',\n  '- Son 21 günde yapılan yemekleri tekrar önerme.',\n  '- Her öneri tek bir yemek adı olsun, kısa ve net.',\n  '',\n  'FAVORİ ADAYLAR (öncelikli öner): ' + favStr,\n  'YASAKLILAR: ' + banStr,\n  'SON YAPILAN (son 21 gün): ' + histStr,\n  '',\n  'ÇIKTI: Sadece aşağıdaki JSON formatında 14 elemanlı dizi döndür, başka hiçbir şey yazma:',\n  '[',\n  '  {\"id\": 1, \"title\": \"...\", \"proteinTag\": \"tavuk|balık|kırmızı_et|bakliyat|vejetaryen|karışık\"},',\n  '  {\"id\": 2, \"title\": \"...\", \"proteinTag\": \"...\"},',\n  '  ...',\n  '  {\"id\": 14, \"title\": \"...\", \"proteinTag\": \"...\"}',\n  ']'\n].join('\\n');\n\nreturn [{ json: { start, prompt, chatId: $json.chatId } }];"
+      },
+      "id": "13ab8b8d-d2c1-436b-9bd4-552073584433",
+      "name": "Build plan prompt (Ollama)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "gemma3:12b"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            },
+            {
+              "name": "stream",
+              "value": "={{ false }}"
+            },
+            {
+              "name": "format",
+              "value": "={{ { \"type\": \"array\", \"minItems\": 14, \"maxItems\": 14, \"items\": { \"type\": \"object\", \"required\": [\"id\", \"title\", \"proteinTag\"], \"properties\": { \"id\": {\"type\": \"integer\"}, \"title\": {\"type\": \"string\"}, \"proteinTag\": {\"type\": \"string\", \"enum\": [\"tavuk\",\"balık\",\"kırmızı_et\",\"bakliyat\",\"vejetaryen\",\"karışık\"] } } } } }}"
+            },
+            {
+              "name": "options",
+              "value": "={{ { \"temperature\": 0.5, \"num_predict\": 600 } }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "6845c846-0351-4fa7-923a-b76a3f90843f",
+      "name": "Ollama: generate (plan)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        32,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nsd.ollamaBusy = false;\nsd.ollamaBusySince = null;\n\nconst start = $node['Build plan prompt (Ollama)'].json.start;\nconst chatId = $node['Build plan prompt (Ollama)'].json.chatId;\n\nlet candidate = $json.response ?? $json.body?.response ?? '';\ncandidate = String(candidate);\n\ntry {\n  candidate = candidate.replace(/\\\\u([0-9a-fA-F]{4})/g, (_, hex) =>\n    String.fromCharCode(parseInt(hex, 16))\n  );\n} catch(e) {}\n\ncandidate = candidate.replace(/```json/gi,'```').replace(/```/g,'').trim();\n\nlet suggestions;\ntry {\n  suggestions = JSON.parse(candidate);\n} catch (e) {\n  const m = candidate.match(/\\[[\\s\\S]*\\]/);\n  if (!m) throw new Error('Öneri JSON bulunamadı. İlk 400: ' + candidate.slice(0,400));\n  suggestions = JSON.parse(m[0]);\n}\n\nif (!Array.isArray(suggestions) || suggestions.length < 7) {\n  throw new Error('En az 7 öneri gelmeli. Gelen: ' + JSON.stringify(suggestions).slice(0,200));\n}\n\n// Öneri listesini state'e kaydet, seçim bekle\nsd.pendingPlanSuggestions = { suggestions, start, since: Date.now() };\nsd.pending[chatId] = { type: 'plan_selection', since: Date.now() };\n\nfunction escHtml(str) {\n  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\n}\n\nconst PROTEIN_EMOJI = {\n  tavuk: '🍗',\n  'balık': '🐟',\n  'kırmızı_et': '🥩',\n  bakliyat: '🫘',\n  vejetaryen: '🥦',\n  'karışık': '🍲'\n};\n\nconst lines = suggestions.map(s => {\n  const emoji = PROTEIN_EMOJI[s.proteinTag] || '🍽️';\n  return emoji + ' ' + s.id + ') ' + escHtml(s.title);\n}).join('\\n');\n\nconst msg = '🍽️ <b>Bu haftaki menü için yemek seç!</b>\\n\\n' +\n  lines + '\\n\\n' +\n  '👇 <b>7 yemek seç</b> — numaraları boşlukla yaz:\\n' +\n  '<i>Örnek: 1 3 5 7 9 11 13</i>';\n\nreturn [{ json: { message: msg } }];"
+      },
+      "id": "8032ab9f-778c-4192-a970-275004a0f88a",
+      "name": "Parse + Store plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nsd.ollamaBusy = false;\nsd.ollamaBusySince = null;\nconst errMsg = $json.error?.message || $json.message || 'Bilinmeyen hata';\nreturn [{ json: { message: '⚠️ Plan oluşturulurken sorun çıktı, tekrar dene.\\n(' + errMsg.slice(0,100) + ')' } }];"
+      },
+      "id": "afc663aa-9bb8-4d6d-b5b4-661cc8b9ca50",
+      "name": "Error: plan release lock + notify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        880
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger (webhook)": {
+      "main": [
+        [
+          {
+            "node": "Init + Normalize (webhook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init + Normalize (webhook)": {
+      "main": [
+        [
+          {
+            "node": "Switch kind",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch kind": {
+      "main": [
+        [
+          {
+            "node": "Handle callback (mode 1/2/3)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle message (commands / ingredients / 1-2-3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle callback (mode 1/2/3)": {
+      "main": [
+        [
+          {
+            "node": "Switch action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle message (commands / ingredients / 1-2-3)": {
+      "main": [
+        [
+          {
+            "node": "Switch action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch action": {
+      "main": [
+        [
+          {
+            "node": "Telegram: ask ingredients",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build prompt (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: send reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build plan prompt (Ollama)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: send reply HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build prompt (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Ollama: Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama: Lock": {
+      "main": [
+        [
+          {
+            "node": "If: skip busy?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: skip busy?": {
+      "main": [
+        [
+          {
+            "node": "Ollama: generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama: generate": {
+      "main": [
+        [
+          {
+            "node": "Parse + Store history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Store history": {
+      "main": [
+        [
+          {
+            "node": "Format message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format message": {
+      "main": [
+        [
+          {
+            "node": "Telegram: send suggestion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error: release lock + notify": {
+      "main": [
+        [
+          {
+            "node": "Telegram: send reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build plan prompt (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Ollama: generate (plan)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama: generate (plan)": {
+      "main": [
+        [
+          {
+            "node": "Parse + Store plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Store plan": {
+      "main": [
+        [
+          {
+            "node": "Telegram: send reply HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error: plan release lock + notify": {
+      "main": [
+        [
+          {
+            "node": "Telegram: send reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2ac0d24b-1fe8-4c71-9e3a-48d6fc710606",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "62bd52f8b4ece52a843742601d712f5bb7b30c651ead50c15d3765df46d28374"
+  },
+  "id": "5KIckBxiBIZd7DXv",
+  "tags": []
+}

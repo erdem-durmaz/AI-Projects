@@ -1,0 +1,397 @@
+{
+  "name": "Dinner - Telegram Poller & Recommender (v2.21.7)",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 12,
+              "unit": "seconds"
+            }
+          ]
+        }
+      },
+      "id": "fa41cbfe-bbd4-46c0-b36a-e57e03a56f62",
+      "name": "Poll Telegram (every 12s)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -1888,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\n\nif (sd.offset === undefined) sd.offset = 0;\nif (!sd.history) sd.history = []; // [{date,title,proteinTag,mode}]\nif (!sd.rules) sd.rules = \"Genel: Sağlıklı ev yemeği, dengeli beslenme. Bir hafta içinde farklı protein kaynakları (tavuk/balık/kırmızı et/bakliyat/vejetaryen) dengeli dağılsın. Kızartma minimum.\";\nif (!sd.banned) sd.banned = [];\nif (!sd.pending) sd.pending = {}; // chatId -> {type:'ingredients', since}\n\nreturn [{ json: { offset: sd.offset } }];"
+      },
+      "id": "f5db5d92-d07e-46ca-a3a7-39d33836a204",
+      "name": "State: Init/Load",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1648,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ `https://api.telegram.org/bot8779232468:AAEEnYBXUU_4X2etXw6R8tZ4GF0XmwcKLjk/getUpdates` }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "timeout",
+              "value": "0"
+            },
+            {
+              "name": "offset",
+              "value": "={{ $json.offset + 1 }}"
+            },
+            {
+              "name": "allowed_updates",
+              "value": "[\"message\",\"callback_query\"]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4be9a2ba-df68-4df9-ba4d-cf290fc9802e",
+      "name": "Telegram: getUpdates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -1408,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst updates = ($json.result || []);\n\nlet maxUpdateId = sd.offset || 0;\n\nconst items = updates.map(u => {\n  if (u.update_id > maxUpdateId) maxUpdateId = u.update_id;\n\n  let kind = 'unknown';\n  let chatId = null;\n  let text = null;\n  let callbackData = null;\n\n  if (u.callback_query) {\n    kind = 'callback';\n    chatId = u.callback_query.message.chat.id;\n    callbackData = u.callback_query.data;\n  } else if (u.message) {\n    kind = 'message';\n    chatId = u.message.chat.id;\n    text = u.message.text || '';\n  }\n\n  return { json: { update_id: u.update_id, kind, chatId: String(chatId), text, callbackData } };\n});\n\nsd.offset = maxUpdateId;\nreturn items;"
+      },
+      "id": "0c046f67-4e1c-4398-971c-feb26adf2a05",
+      "name": "Normalize + Save offset",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1152,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "acd22eb2-a6db-4430-8252-398608d480e7",
+      "name": "Split in Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -928,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "8b6d9d4b-a018-4900-9d28-641c904f5128",
+      "name": "Switch kind",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst chatId = String($json.chatId);\n\n// sadece hedef grup\nif (chatId !== \"-4929983051\") return [{ json: { action: 'ignore' } }];\n\nconst data = $json.callbackData || '';\nconst m = data.match(/^mode:(1|2|3)$/);\nif (!m) return [{ json: { action: 'noop' } }];\n\nconst mode = m[1];\n\nif (mode === '1') {\n  sd.pending[chatId] = { type: 'ingredients', since: Date.now() };\n  return [{ json: { action: 'ask_ingredients', chatId } }];\n}\n\nreturn [{ json: { action: 'generate', chatId, mode } }];"
+      },
+      "id": "e1e3d4d2-3a27-467c-96ce-331cc60aff4f",
+      "name": "Handle callback (mode 1/2/3)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst chatId = String($json.chatId);\nconst text = ($json.text || '').trim();\n\nif (chatId !== \"-4929983051\") return [{ json: { action: 'ignore' } }];\n\n// commands\nif (text.startsWith('/reset')) {\n  sd.history = [];\n  sd.banned = [];\n  sd.rules = \"Genel: Sağlıklı ev yemeği, dengeli beslenme. Bir hafta içinde farklı protein kaynakları (tavuk/balık/kırmızı et/bakliyat/vejetaryen) dengeli dağılsın. Kızartma minimum.\";\n  sd.pending = {};\n  return [{ json: { action: 'reply', chatId, message: '✅ Hafıza sıfırlandı (history/rules/ban/pending).' } }];\n}\n\nif (text.startsWith('/history')) {\n  const h = (sd.history || []).slice(-7)\n    .map((x,i)=>`${i+1}) ${x.date} • ${x.title} (${x.proteinTag||'protein?'})`)\n    .join('\\n');\n  return [{ json: { action: 'reply', chatId, message: h ? `📌 Son öneriler:\\n${h}` : 'Henüz geçmiş yok.' } }];\n}\n\nif (text.startsWith('/rules')) {\n  const newRules = text.replace('/rules','').trim();\n  if (!newRules) {\n    return [{ json: { action: 'reply', chatId, message: `Mevcut kurallar:\\n${sd.rules}\\n\\nGüncellemek için: /rules <yeni kurallar>` } }];\n  }\n  sd.rules = newRules;\n  return [{ json: { action: 'reply', chatId, message: '✅ Kurallar güncellendi.' } }];\n}\n\nif (text.startsWith('/ban')) {\n  const item = text.replace('/ban','').trim().toLowerCase();\n  if (!item) return [{ json: { action: 'reply', chatId, message: 'Kullanım: /ban pizza' } }];\n  if (!sd.banned.includes(item)) sd.banned.push(item);\n  return [{ json: { action: 'reply', chatId, message: `⛔️ Yasaklara eklendi: ${item}` } }];\n}\n\nif (text.startsWith('/unban')) {\n  const item = text.replace('/unban','').trim().toLowerCase();\n  sd.banned = (sd.banned || []).filter(x => x !== item);\n  return [{ json: { action: 'reply', chatId, message: `✅ Yasaktan çıkarıldı: ${item}` } }];\n}\n\n// pending ingredients\nconst pend = sd.pending[chatId];\nif (pend && pend.type === 'ingredients') {\n  delete sd.pending[chatId];\n  return [{ json: { action: 'generate', chatId, mode: '1', ingredients: text } }];\n}\n\n// fallback numeric\nif (['1','2','3'].includes(text)) {\n  if (text === '1') {\n    sd.pending[chatId] = { type: 'ingredients', since: Date.now() };\n    return [{ json: { action: 'ask_ingredients', chatId } }];\n  }\n  return [{ json: { action: 'generate', chatId, mode: text } }];\n}\n\nreturn [{ json: { action: 'noop' } }];"
+      },
+      "id": "ddf13415-eabf-4cf4-9905-35fb6280814f",
+      "name": "Handle message (commands / ingredients / 1-2-3)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        272
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b478450f-de3a-4979-b3dc-9e9df645ef59",
+      "name": "Switch action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ `https://api.telegram.org/bot8779232468:AAEEnYBXUU_4X2etXw6R8tZ4GF0XmwcKLjk/sendMessage` }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"-4929983051\",\n  \"text\": \"Evde hangi malzemeler var? (virgülle yaz: örn. tavuk, yoğurt, makarna, domates, soğan)\\n\\nHemen 3 kişilik öneri hazırlayayım 🙂\"\n}",
+        "options": {}
+      },
+      "id": "0838d9db-e011-4947-9fc7-f9e2c15cc513",
+      "name": "Telegram: ask ingredients",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ `https://api.telegram.org/bot8779232468:AAEEnYBXUU_4X2etXw6R8tZ4GF0XmwcKLjk/sendMessage` }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"-4929983051\",\n  \"text\": $json.message\n}",
+        "options": {}
+      },
+      "id": "0981c9cd-4765-4729-aa5d-f3b5fb7857e6",
+      "name": "Telegram: send reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        0,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst mode = String($json.mode);\nconst ingredients = ($json.ingredients || '').trim();\n\nconst now = new Date();\nconst yyyy = now.getFullYear();\nconst mm = String(now.getMonth() + 1).padStart(2, '0');\nconst dd = String(now.getDate()).padStart(2, '0');\nconst today = `${yyyy}-${mm}-${dd}`;\n\nconst history = (sd.history || []).slice(-7);\nconst banned = (sd.banned || []);\n\nconst modeDesc = mode === '1' ? 'Evdeki malzemelere göre' : (mode === '3' ? 'Hafif' : 'Direkt öner');\n\nconst prompt = `Sen bir akşam yemeği asistanısın. 3 kişilik sağlıklı ev yemeği öner.\n\nKURALLAR (kullanıcı günceller):\\n${sd.rules}\\n\nAMAÇLAR:\n- Dengeli beslenme.\n- 1 hafta içinde protein kaynakları çeşitlensin (tavuk/balık/kırmızı et/bakliyat/vejetaryen).\n- Üst üste aynı/çok benzer yemeği önermeyin (son 7 öneriye bak).\n- Yasaklıları asla önermeyin.\n- Çıktıyı SADECE geçerli JSON olarak ver (markdown yok).\n\nYASAKLILAR: ${banned.length ? banned.join(', ') : 'yok'}\nSON ÖNERİLER (son 7): ${history.length ? history.map(h => `${h.date}:${h.title}`).join(' | ') : 'yok'}\n\nMOD: ${modeDesc}\n${mode === '1' ? `EVDEKİ MALZEMELER: ${ingredients}` : ''}\n\nÇIKTI JSON ŞEMASI:\n{\n  \"title\": \"...\",\n  \"proteinTag\": \"tavuk|balık|kırmızı_et|bakliyat|vejetaryen|karışık\",\n  \"prepMinutes\": 30,\n  \"ingredients\": [\"...\"],\n  \"steps\": [\"...\"],\n  \"nutritionNote\": \"kısa not\",\n  \"shoppingNeeded\": [\"...\"],\n  \"whyThis\": \"1 cümle\",\n  \"lightLevel\": \"hafif|orta\"\n}\n`;\n\nreturn [{ json: { today, mode, prompt } }];"
+      },
+      "id": "67adedb4-1ae8-483e-b32f-a1eb8bc1a665",
+      "name": "Build prompt (Ollama)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama3.1:8b\",\n  \"prompt\": $json.prompt,\n  \"stream\": false,\n  \"options\": { \"temperature\": 0.7 }\n}",
+        "options": {}
+      },
+      "id": "848803f9-f99b-4918-9483-a30ad3dfde77",
+      "name": "Ollama: generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        240,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst today = $node[\"Build prompt (Ollama)\"].json.today;\nconst mode = $node[\"Build prompt (Ollama)\"].json.mode;\n\nlet candidate = $json.response;\nif (!candidate && $json.body?.response) candidate = $json.body.response;\n\nlet obj;\ntry {\n  obj = JSON.parse(candidate);\n} catch (e) {\n  const m = String(candidate || '').match(/\\{[\\s\\S]*\\}/);\n  if (!m) throw e;\n  obj = JSON.parse(m[0]);\n}\n\nif (!sd.history) sd.history = [];\nsd.history.push({ date: today, title: obj.title, proteinTag: obj.proteinTag, mode });\nsd.history = sd.history.slice(-30);\n\nreturn [{ json: { obj } }];"
+      },
+      "id": "576c8095-2d42-443a-aa19-ca2e317fbfda",
+      "name": "Parse + Store history",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const o = $json.obj;\n\nconst ing = (o.ingredients || []).map(x => `• ${x}`).join('\\n');\nconst steps = (o.steps || []).map((x, i) => `${i + 1}) ${x}`).join('\\n');\nconst shop = (o.shoppingNeeded || []);\nconst shopText = shop.length ? shop.map(x => `• ${x}`).join('\\n') : '• Yok / mevcutlarla olur';\n\nconst msg = `🍽️ *${o.title}*\\n\\n` +\n  `🏷️ Protein: *${o.proteinTag}* | Hafiflik: *${o.lightLevel || 'orta'}*\\n` +\n  `⏱️ Hazırlık: *${o.prepMinutes} dk*\\n\\n` +\n  `🧺 Malzemeler:\\n${ing || '• (liste yok)'}\\n\\n` +\n  `🛒 Alışveriş Gerekir mi?\\n${shopText}\\n\\n` +\n  `👩‍🍳 Yapılış:\\n${steps || '(adım yok)'}\\n\\n` +\n  `✅ Neden bu? ${o.whyThis || ''}\\n` +\n  `🥗 Beslenme notu: ${o.nutritionNote || ''}`;\n\nreturn [{ json: { text: msg } }];"
+      },
+      "id": "91b1a47a-5eb1-4188-9088-5db0a1ae5572",
+      "name": "Format message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ `https://api.telegram.org/bot8779232468:AAEEnYBXUU_4X2etXw6R8tZ4GF0XmwcKLjk/sendMessage` }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"-4929983051\",\n  \"text\": $json.text,\n  \"parse_mode\": \"Markdown\"\n}",
+        "options": {}
+      },
+      "id": "91763fae-0eb9-4e2b-a5b2-bfa32147ceb6",
+      "name": "Telegram: send suggestion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        960,
+        160
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Poll Telegram (every 12s)": {
+      "main": [
+        [
+          {
+            "node": "State: Init/Load",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "State: Init/Load": {
+      "main": [
+        [
+          {
+            "node": "Telegram: getUpdates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: getUpdates": {
+      "main": [
+        [
+          {
+            "node": "Normalize + Save offset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize + Save offset": {
+      "main": [
+        [
+          {
+            "node": "Split in Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split in Batches": {
+      "main": [
+        [
+          {
+            "node": "Switch kind",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split in Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle callback (mode 1/2/3)": {
+      "main": [
+        [
+          {
+            "node": "Switch action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle message (commands / ingredients / 1-2-3)": {
+      "main": [
+        [
+          {
+            "node": "Switch action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build prompt (Ollama)": {
+      "main": [
+        [
+          {
+            "node": "Ollama: generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama: generate": {
+      "main": [
+        [
+          {
+            "node": "Parse + Store history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Store history": {
+      "main": [
+        [
+          {
+            "node": "Format message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format message": {
+      "main": [
+        [
+          {
+            "node": "Telegram: send suggestion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "35667ef4-64cd-4d1a-b7ba-51b25f8d982d",
+  "meta": {
+    "instanceId": "62bd52f8b4ece52a843742601d712f5bb7b30c651ead50c15d3765df46d28374"
+  },
+  "id": "1HhacfQVuGCQ2dJ1",
+  "tags": []
+}
