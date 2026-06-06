@@ -42,6 +42,11 @@ class MealAgentGraph:
 
         return result.get("response", "Bir cevap oluşturamadım.")
 
+    def _looks_like_weekly_bulk_selection(self, message: str) -> bool:
+        import re
+        numbers = re.findall(r"\d+", message)
+        return len(numbers) >= 7
+
     def _router_node(self, state: MealAgentState) -> MealAgentState:
         message = state["message"].strip().lower()
         user_id = state["user_id"]
@@ -73,11 +78,19 @@ class MealAgentGraph:
         elif message in ["/iptal", "iptal", "vazgeç"]:
             intent = "cancel"
 
-        elif message in ["1", "2", "3", "4", "5"]:
-            if active_flow and active_flow["flow_type"] == "weekly_plan":
-                intent = "weekly_plan_selection"
+        elif self._looks_like_weekly_bulk_selection(message):
+            if active_flow and active_flow["flow_type"] == "weekly_bulk":
+                intent = "weekly_bulk_selection"
             else:
+                intent = "general"
+
+        elif message in ["1", "2", "3", "4", "5"]:
+            if active_flow and active_flow["flow_type"] == "daily":
                 intent = "daily_selection"
+            elif active_flow and active_flow["flow_type"] == "weekly_bulk":
+                intent = "weekly_bulk_selection"
+            else:
+                intent = "no_active_selection"
 
         elif "yemek konuşmayalım" in message or "yemek konusunu kapat" in message:
             intent = "stop_food_topic"
@@ -96,7 +109,7 @@ class MealAgentGraph:
                 "Merhaba. Yemek planlama asistanın hazırım.\n\n"
                 "Komutlar:\n"
                 "/bugun - Bugün için 5 farklı kategoriden yemek önerisi\n"
-                "/haftalik_plan - Gün gün haftalık akşam yemeği planı\n"
+                "/haftalik_plan - Haftalık akşam yemeği planı için seçenek listesi\n"
                 "/plan - Haftalık planı göster\n"
                 "/favoriler - Favorileri listele\n"
                 "/ayarlar - Tercihleri göster\n"
@@ -104,6 +117,9 @@ class MealAgentGraph:
             )
 
         elif intent == "daily_suggestion":
+            self.db.clear_active_flow(user_id)
+            self.db.start_daily_flow(user_id)
+
             candidates = self.recipe_search.get_five_category_suggestions(
                 user_id=user_id,
                 db=self.db,
@@ -131,14 +147,11 @@ class MealAgentGraph:
                 response = "Seçim için 1, 2, 3, 4 veya 5 yazmalısın."
 
         elif intent == "weekly_plan_start":
+            self.db.clear_active_flow(user_id)
             response = self.weekly_plan.start_weekly_plan(user_id)
 
-        elif intent == "weekly_plan_selection":
-            try:
-                option_no = int(message)
-                response = self.weekly_plan.handle_weekly_selection(user_id, option_no)
-            except Exception:
-                response = "Haftalık plan seçimi için 1, 2, 3, 4 veya 5 yazmalısın."
+        elif intent == "weekly_bulk_selection":
+            response = self.weekly_plan.handle_weekly_bulk_selection(user_id, message)
 
         elif intent == "show_weekly_plan":
             response = self.weekly_plan.show_weekly_plan(user_id)
@@ -155,6 +168,13 @@ class MealAgentGraph:
         elif intent == "cancel":
             self.db.clear_active_flow(user_id)
             response = "Aktif akışı iptal ettim."
+
+        elif intent == "no_active_selection":
+            response = (
+                "Aktif bir seçim akışı bulamadım.\n\n"
+                "Günlük öneri almak için /bugun yazabilirsin.\n"
+                "Haftalık plan oluşturmak için /haftalik_plan yazabilirsin."
+            )
 
         elif intent == "stop_food_topic":
             response = "Tamam, yemek konusunu kapatalım. Başka bir konuda yardımcı olabilirim."

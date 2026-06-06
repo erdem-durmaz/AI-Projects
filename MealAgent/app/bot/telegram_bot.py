@@ -20,46 +20,87 @@ def run_bot(db):
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
         response = meal_agent.invoke(user_id=user_id, message="/start")
-        await update.message.reply_text(response)
+        await update.message.reply_text(
+            response,
+            disable_web_page_preview=True
+        )
 
     async def bugun(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
-        await update.message.reply_text("5 farklı kategoriden yemek önerisi arıyorum...")
+
+        await update.message.reply_text(
+            "5 farklı kategoriden yemek önerisi arıyorum...",
+            disable_web_page_preview=True
+        )
+
         response = meal_agent.invoke(user_id=user_id, message="/bugun")
-        await update.message.reply_text(response)
+
+        await update.message.reply_text(
+            response,
+            disable_web_page_preview=True
+        )
 
     async def haftalik_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
-        await update.message.reply_text("Haftalık planı gün gün oluşturmaya başlıyorum...")
+
+        await update.message.reply_text(
+            "Haftalık plan için yemek seçenekleri arıyorum...",
+            disable_web_page_preview=True
+        )
+
         response = meal_agent.invoke(user_id=user_id, message="/haftalik_plan")
-        await update.message.reply_text(response)
+
+        await update.message.reply_text(
+            response,
+            disable_web_page_preview=True
+        )
 
     async def plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
         response = meal_agent.invoke(user_id=user_id, message="/plan")
-        await update.message.reply_text(response)
+
+        await update.message.reply_text(
+            response,
+            disable_web_page_preview=True
+        )
 
     async def favoriler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
         response = meal_agent.invoke(user_id=user_id, message="/favoriler")
-        await update.message.reply_text(response)
+
+        await update.message.reply_text(
+            response,
+            disable_web_page_preview=True
+        )
 
     async def ayarlar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
         response = meal_agent.invoke(user_id=user_id, message="/ayarlar")
-        await update.message.reply_text(response)
+
+        await update.message.reply_text(
+            response,
+            disable_web_page_preview=True
+        )
 
     async def iptal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
         response = meal_agent.invoke(user_id=user_id, message="/iptal")
-        await update.message.reply_text(response)
+
+        await update.message.reply_text(
+            response,
+            disable_web_page_preview=True
+        )
 
     async def text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
         message = update.message.text
 
         response = meal_agent.invoke(user_id=user_id, message=message)
-        await update.message.reply_text(response)
+
+        await update.message.reply_text(
+            response,
+            disable_web_page_preview=True
+        )
 
     app = ApplicationBuilder().token(settings.telegram_bot_token).build()
 

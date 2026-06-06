@@ -107,8 +107,13 @@ class Database:
 
             conn.commit()
 
+    # ---------------------------------------------------------------------
+    # Preferences
+    # ---------------------------------------------------------------------
+
     def ensure_default_preferences(self, user_id: str):
         now = datetime.now().isoformat()
+
         criteria = [
             "hafif",
             "fit",
@@ -123,11 +128,18 @@ class Database:
             "fırın yemeği",
             "tencere yemeği",
         ]
-        exclusions = ["kuzu eti", "uzakdoğu mutfağı"]
+
+        exclusions = [
+            "kuzu eti",
+            "uzakdoğu mutfağı",
+        ]
 
         with self.connect() as conn:
             cur = conn.cursor()
-            cur.execute("SELECT user_id FROM user_preferences WHERE user_id = ?", (user_id,))
+            cur.execute(
+                "SELECT user_id FROM user_preferences WHERE user_id = ?",
+                (user_id,)
+            )
             exists = cur.fetchone()
 
             if not exists:
@@ -148,30 +160,53 @@ class Database:
 
     def get_preferences(self, user_id: str):
         self.ensure_default_preferences(user_id)
+
         with self.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM user_preferences WHERE user_id = ?",
                 (user_id,)
             ).fetchone()
-            return dict(row)
 
-    def clear_candidates(self, user_id: str, flow_type: str, day_name: str | None = None):
+            return dict(row) if row else None
+
+    # ---------------------------------------------------------------------
+    # Candidate Meals
+    # ---------------------------------------------------------------------
+
+    def clear_candidates(
+        self,
+        user_id: str,
+        flow_type: str,
+        day_name: str | None = None,
+    ):
         with self.connect() as conn:
             if day_name:
-                conn.execute(
-                    "DELETE FROM recipe_candidates WHERE user_id = ? AND flow_type = ? AND day_name = ?",
-                    (user_id, flow_type, day_name)
-                )
+                conn.execute("""
+                DELETE FROM recipe_candidates
+                WHERE user_id = ? AND flow_type = ? AND day_name = ?
+                """, (user_id, flow_type, day_name))
             else:
-                conn.execute(
-                    "DELETE FROM recipe_candidates WHERE user_id = ? AND flow_type = ?",
-                    (user_id, flow_type)
-                )
+                conn.execute("""
+                DELETE FROM recipe_candidates
+                WHERE user_id = ? AND flow_type = ?
+                """, (user_id, flow_type))
+
             conn.commit()
 
-    def save_candidates(self, user_id: str, flow_type: str, day_name: str | None, candidates: list):
+    def save_candidates(
+        self,
+        user_id: str,
+        flow_type: str,
+        day_name: str | None,
+        candidates: list,
+    ):
         now = datetime.now().isoformat()
-        self.clear_candidates(user_id, flow_type, day_name)
+
+        self.clear_candidates(
+            user_id=user_id,
+            flow_type=flow_type,
+            day_name=day_name,
+        )
 
         with self.connect() as conn:
             for item in candidates:
@@ -190,44 +225,92 @@ class Database:
                     item.get("source", ""),
                     now,
                 ))
+
             conn.commit()
 
-    def get_candidate_by_option(self, user_id: str, flow_type: str, option_no: int, day_name: str | None = None):
+    def get_candidate_by_option(
+        self,
+        user_id: str,
+        flow_type: str,
+        option_no: int,
+        day_name: str | None = None,
+    ):
         with self.connect() as conn:
             if day_name:
                 row = conn.execute("""
-                SELECT * FROM recipe_candidates
-                WHERE user_id = ? AND flow_type = ? AND day_name = ? AND option_no = ?
+                SELECT *
+                FROM recipe_candidates
+                WHERE user_id = ?
+                  AND flow_type = ?
+                  AND day_name = ?
+                  AND option_no = ?
                 """, (user_id, flow_type, day_name, option_no)).fetchone()
             else:
                 row = conn.execute("""
-                SELECT * FROM recipe_candidates
-                WHERE user_id = ? AND flow_type = ? AND option_no = ?
+                SELECT *
+                FROM recipe_candidates
+                WHERE user_id = ?
+                  AND flow_type = ?
+                  AND option_no = ?
                 """, (user_id, flow_type, option_no)).fetchone()
 
             return dict(row) if row else None
 
-    def set_last_selected(self, user_id: str, title: str, url: str, category: str):
+    # ---------------------------------------------------------------------
+    # Last Selected
+    # ---------------------------------------------------------------------
+
+    def set_last_selected(
+        self,
+        user_id: str,
+        title: str,
+        url: str,
+        category: str,
+    ):
         now = datetime.now().isoformat()
+
         with self.connect() as conn:
             conn.execute("""
-            INSERT INTO last_selected (user_id, title, url, category, updated_at)
+            INSERT INTO last_selected
+            (user_id, title, url, category, updated_at)
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 title = excluded.title,
                 url = excluded.url,
                 category = excluded.category,
                 updated_at = excluded.updated_at
-            """, (user_id, title, url, category, now))
+            """, (
+                user_id,
+                title,
+                url,
+                category,
+                now,
+            ))
+
             conn.commit()
 
     def get_last_selected(self, user_id: str):
         with self.connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM last_selected WHERE user_id = ?",
-                (user_id,)
-            ).fetchone()
+            row = conn.execute("""
+            SELECT *
+            FROM last_selected
+            WHERE user_id = ?
+            """, (user_id,)).fetchone()
+
             return dict(row) if row else None
+
+    def clear_last_selected(self, user_id: str):
+        with self.connect() as conn:
+            conn.execute("""
+            DELETE FROM last_selected
+            WHERE user_id = ?
+            """, (user_id,))
+
+            conn.commit()
+
+    # ---------------------------------------------------------------------
+    # Daily Choices
+    # ---------------------------------------------------------------------
 
     def add_daily_choice(self, user_id: str, item: dict):
         now = datetime.now().isoformat()
@@ -246,45 +329,78 @@ class Database:
                 item.get("category", ""),
                 now,
             ))
+
             conn.commit()
 
         self.set_last_selected(
-            user_id,
-            item["title"],
-            item.get("url", ""),
-            item.get("category", "")
+            user_id=user_id,
+            title=item["title"],
+            url=item.get("url", ""),
+            category=item.get("category", ""),
         )
 
-    def add_favorite(self, user_id: str, title: str, url: str, category: str):
+    def get_recent_meals(self, user_id: str, limit: int = 10):
+        with self.connect() as conn:
+            rows = conn.execute("""
+            SELECT title
+            FROM daily_choices
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """, (user_id, limit)).fetchall()
+
+            return [row["title"] for row in rows]
+
+    # ---------------------------------------------------------------------
+    # Favorites
+    # ---------------------------------------------------------------------
+
+    def add_favorite(
+        self,
+        user_id: str,
+        title: str,
+        url: str,
+        category: str,
+    ):
         now = datetime.now().isoformat()
+
         with self.connect() as conn:
             conn.execute("""
-            INSERT INTO favorites (user_id, title, url, category, created_at)
+            INSERT INTO favorites
+            (user_id, title, url, category, created_at)
             VALUES (?, ?, ?, ?, ?)
-            """, (user_id, title, url, category, now))
+            """, (
+                user_id,
+                title,
+                url,
+                category,
+                now,
+            ))
+
             conn.commit()
 
     def list_favorites(self, user_id: str):
         with self.connect() as conn:
             rows = conn.execute("""
-            SELECT * FROM favorites
+            SELECT *
+            FROM favorites
             WHERE user_id = ?
             ORDER BY id DESC
             """, (user_id,)).fetchall()
-            return [dict(r) for r in rows]
 
-    def get_recent_meals(self, user_id: str, limit: int = 10):
-        with self.connect() as conn:
-            rows = conn.execute("""
-            SELECT title FROM daily_choices
-            WHERE user_id = ?
-            ORDER BY id DESC
-            LIMIT ?
-            """, (user_id, limit)).fetchall()
-            return [r["title"] for r in rows]
+            return [dict(row) for row in rows]
 
-    def start_weekly_flow(self, user_id: str, week_start: str):
+    # ---------------------------------------------------------------------
+    # Active Flow
+    # ---------------------------------------------------------------------
+
+    def start_daily_flow(self, user_id: str):
+        """
+        /bugun komutu sonrası günlük seçim akışını başlatır.
+        Kullanıcı 1-5 arası seçim yaptığında daily_selection olarak yorumlanır.
+        """
         now = datetime.now().isoformat()
+
         with self.connect() as conn:
             conn.execute("""
             INSERT INTO active_flow
@@ -295,41 +411,135 @@ class Database:
                 current_day_index = excluded.current_day_index,
                 week_start = excluded.week_start,
                 updated_at = excluded.updated_at
-            """, (user_id, "weekly_plan", 0, week_start, now, now))
+            """, (
+                user_id,
+                "daily",
+                0,
+                "",
+                now,
+                now,
+            ))
+
+            conn.commit()
+
+    def start_weekly_flow(self, user_id: str, week_start: str):
+        """
+        Eski gün gün haftalık plan akışı için tutuldu.
+        Yeni yapıda ana kullanım start_weekly_bulk_flow metodudur.
+        """
+        now = datetime.now().isoformat()
+
+        with self.connect() as conn:
+            conn.execute("""
+            INSERT INTO active_flow
+            (user_id, flow_type, current_day_index, week_start, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                flow_type = excluded.flow_type,
+                current_day_index = excluded.current_day_index,
+                week_start = excluded.week_start,
+                updated_at = excluded.updated_at
+            """, (
+                user_id,
+                "weekly_plan",
+                0,
+                week_start,
+                now,
+                now,
+            ))
+
+            conn.commit()
+
+    def start_weekly_bulk_flow(self, user_id: str, week_start: str):
+        """
+        Yeni haftalık plan akışı.
+
+        /haftalik_plan komutu sonrası:
+        - Bot 15 yemek önerisi üretir.
+        - Kullanıcı 7 seçim yazar.
+        - Bu seçimler Pazartesi-Pazar olarak weekly_plan tablosuna kaydedilir.
+        """
+        now = datetime.now().isoformat()
+
+        with self.connect() as conn:
+            conn.execute("""
+            INSERT INTO active_flow
+            (user_id, flow_type, current_day_index, week_start, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                flow_type = excluded.flow_type,
+                current_day_index = excluded.current_day_index,
+                week_start = excluded.week_start,
+                updated_at = excluded.updated_at
+            """, (
+                user_id,
+                "weekly_bulk",
+                0,
+                week_start,
+                now,
+                now,
+            ))
+
             conn.commit()
 
     def get_active_flow(self, user_id: str):
         with self.connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM active_flow WHERE user_id = ?",
-                (user_id,)
-            ).fetchone()
+            row = conn.execute("""
+            SELECT *
+            FROM active_flow
+            WHERE user_id = ?
+            """, (user_id,)).fetchone()
+
             return dict(row) if row else None
 
     def update_weekly_flow_day_index(self, user_id: str, day_index: int):
         now = datetime.now().isoformat()
+
         with self.connect() as conn:
             conn.execute("""
             UPDATE active_flow
-            SET current_day_index = ?, updated_at = ?
+            SET current_day_index = ?,
+                updated_at = ?
             WHERE user_id = ?
-            """, (day_index, now, user_id))
+            """, (
+                day_index,
+                now,
+                user_id,
+            ))
+
             conn.commit()
 
     def clear_active_flow(self, user_id: str):
         with self.connect() as conn:
-            conn.execute("DELETE FROM active_flow WHERE user_id = ?", (user_id,))
+            conn.execute("""
+            DELETE FROM active_flow
+            WHERE user_id = ?
+            """, (user_id,))
+
             conn.commit()
+
+    # ---------------------------------------------------------------------
+    # Weekly Plan
+    # ---------------------------------------------------------------------
 
     def get_next_monday(self):
         today = date.today()
         days_ahead = 0 - today.weekday()
+
         if days_ahead <= 0:
             days_ahead += 7
+
         return today + timedelta(days=days_ahead)
 
-    def save_weekly_plan_item(self, user_id: str, week_start: str, day_name: str, item: dict):
+    def save_weekly_plan_item(
+        self,
+        user_id: str,
+        week_start: str,
+        day_name: str,
+        item: dict,
+    ):
         now = datetime.now().isoformat()
+
         with self.connect() as conn:
             conn.execute("""
             INSERT INTO weekly_plan
@@ -349,23 +559,34 @@ class Database:
                 item.get("category", ""),
                 now,
             ))
+
             conn.commit()
 
         self.set_last_selected(
-            user_id,
-            item["title"],
-            item.get("url", ""),
-            item.get("category", "")
+            user_id=user_id,
+            title=item["title"],
+            url=item.get("url", ""),
+            category=item.get("category", ""),
         )
 
-    def get_weekly_plan(self, user_id: str, week_start: str | None = None):
+    def get_weekly_plan(
+        self,
+        user_id: str,
+        week_start: str | None = None,
+    ):
         if week_start is None:
             week_start = self.get_next_monday().isoformat()
 
         with self.connect() as conn:
             rows = conn.execute("""
-            SELECT * FROM weekly_plan
-            WHERE user_id = ? AND week_start = ?
+            SELECT *
+            FROM weekly_plan
+            WHERE user_id = ?
+              AND week_start = ?
             ORDER BY id ASC
-            """, (user_id, week_start)).fetchall()
-            return [dict(r) for r in rows]
+            """, (
+                user_id,
+                week_start,
+            )).fetchall()
+
+            return [dict(row) for row in rows]
