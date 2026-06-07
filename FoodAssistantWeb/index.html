@@ -475,7 +475,9 @@ async function send() {
     typing.remove();
     if (res.type === 'meal') {
       S.history.push({ role:'user', content:msg });
-      S.history.push({ role:'assistant', content:'[Yemek önerileri]' });
+      // Store actual meal names so LLM avoids repeating them
+      const allMeals = Object.values(res.data).flatMap(cat => cat.items);
+      S.history.push({ role:'assistant', content:'Önerilen yemekler: ' + allMeals.join(', ') + '. Bir sonraki istekte bunları tekrar önerme.' });
       addMealCards(res.data);
     } else {
       S.history.push({ role:'user', content:msg });

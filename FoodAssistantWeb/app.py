@@ -16,7 +16,6 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 import uvicorn
 load_dotenv()
-
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "BURAYA_API_KEY_YAZ")
@@ -37,17 +36,19 @@ KESİNLİKLE ÖNERİLMEYECEKLER:
 - Kuzu eti, Uzakdoğu mutfağı, Noodle, Soya sosu, Teriyaki, Sushi, Ramen, Wok tarzı yemekler
 
 YEMEK ÖNERİSİ KURALLARI:
-"Ne yiyelim", "yemek öner", "akşam yemeği", "bugün ne yesek" gibi sorular geldiğinde SADECE şu JSON formatını döndür, başka hiçbir şey yazma:
+"Ne yiyelim", "yemek öner", "akşam yemeği", "bugün ne yesek" gibi sorular geldiğinde SADECE şu JSON formatını döndür, başka hiçbir şey yazma.
+
+ÇOK ÖNEMLİ: Her seferinde FARKLI yemekler öner. Bir önceki önerileri tekrar etme. Geniş bir Türk mutfağı repertuvarından seç — güveç, fırın, tencere, ızgara, çorba, pilav yemekleri, zeytinyağlılar, mevsim sebzeleri hepsi dahil. Yaratıcı ol.
 
 {
   "type": "meal_suggestion",
   "categories": {
-    "tavuk":      ["Yemek 1", "Yemek 2", "Yemek 3"],
-    "dana_et":    ["Yemek 1", "Yemek 2", "Yemek 3"],
-    "sebze":      ["Yemek 1", "Yemek 2", "Yemek 3"],
-    "bakliyat":   ["Yemek 1", "Yemek 2", "Yemek 3"],
-    "fit_salata": ["Yemek 1", "Yemek 2", "Yemek 3"],
-    "balik":      ["Yemek 1", "Yemek 2", "Yemek 3"]
+    "tavuk":      ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
+    "dana_et":    ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
+    "sebze":      ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
+    "bakliyat":   ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
+    "fit_salata": ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
+    "balik":      ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"]
   }
 }
 
@@ -127,7 +128,7 @@ class AgentState(TypedDict):
     meal_data: dict
 
 def call_llm(state: AgentState) -> AgentState:
-    llm = ChatGroq(api_key=GROQ_API_KEY, model=MODEL_NAME, temperature=0.7, max_tokens=1024)
+    llm = ChatGroq(api_key=GROQ_API_KEY, model=MODEL_NAME, temperature=1.0, max_tokens=1500)
     messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
     raw = llm.invoke(messages).content.strip()
     meal_data = None
