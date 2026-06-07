@@ -268,6 +268,19 @@ function addUserMsg(text) {
   return wrapper;
 }
 
+function addBotMsg(text) {
+  hideEmptyState();
+  const wrapper = document.createElement('div');
+  wrapper.className = 'msg-wrapper bot';
+  const d = document.createElement('div');
+  d.className = 'msg bot';
+  d.textContent = text;
+  wrapper.appendChild(d);
+  msgEl.appendChild(wrapper);
+  scrollBot();
+  return d;
+}
+
 function addTyping() {
   const wrapper = document.createElement('div');
   wrapper.className = 'msg-wrapper bot';
@@ -307,11 +320,6 @@ function addMealCards(data) {
       item.className = 'meal-item';
       item.draggable = true;
       item.dataset.name = name;
-
-      const thumb = document.createElement('img');
-      thumb.className = 'meal-thumb';
-      thumb.loading = 'lazy';
-      thumb.src = `https://tse1.mm.bing.net/th?q=${encodeURIComponent(name)}+yemek+tarifi&w=120&h=120&c=7`;
 
       const nameEl = document.createElement('span');
       nameEl.className = 'meal-name';
@@ -356,7 +364,6 @@ function addMealCards(data) {
       actions.appendChild(recipeBtn);
       actions.appendChild(planBtn);
       actions.appendChild(btn);
-      item.appendChild(thumb);
       item.appendChild(nameEl);
       item.appendChild(actions);
       card.appendChild(item);
@@ -405,8 +412,12 @@ async function sendStream(msg) {
           addMealCards(data.data);
         } else if (data.type === 'action' && data.action === 'open_recipe') {
           pushHistory(msg, `Sistem: ${data.query} tarifi arandı.`);
-          addUserMsg(`(🔍 ${data.query} aranıyor...)`);
-          openRecipeByName(data.query);
+          const msgNode = addBotMsg(`🔍 ${data.query} aranıyor...`);
+          openRecipeByName(data.query).then(() => {
+            msgNode.textContent = `✅ ${data.query} tarifi bulundu ve ekranda açıldı.`;
+          }).catch(() => {
+            msgNode.textContent = `❌ ${data.query} tarifi bulunamadı.`;
+          });
         } else {
           throw new Error(data.error || 'Öneri oluşturulamadı');
         }
@@ -488,9 +499,11 @@ async function openRecipeByName(name) {
       renderListDrawer(result.items, { url: result.source_url || '#', name });
     } else {
       recipeContent.innerHTML = `<div class="recipe-error"><div style="font-size:32px;margin-bottom:8px">🤷</div><p>${esc(result.error || 'Tarif bulunamadı')}</p></div>`;
+      throw new Error('Not found');
     }
   } catch(e) {
     recipeContent.innerHTML = '<div class="recipe-error"><div style="font-size:32px;margin-bottom:8px">⚠️</div><p>Yüklenemedi</p></div>';
+    throw e;
   }
 }
 
