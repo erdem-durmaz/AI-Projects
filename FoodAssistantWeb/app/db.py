@@ -162,9 +162,9 @@ def db_clear_plan():
 def db_get_preferences() -> dict[str, str]:
     with db_session() as db:
         prefs_db = db.query(Preference).all()
-    prefs = dict(DEFAULT_PREFERENCES)
-    prefs.update({p.key: p.value for p in prefs_db})
-    return prefs
+        prefs = dict(DEFAULT_PREFERENCES)
+        prefs.update({p.key: p.value for p in prefs_db})
+        return prefs
 
 def db_set_preferences(prefs: dict[str, str]):
     with db_session() as db:
