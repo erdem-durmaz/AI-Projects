@@ -127,9 +127,12 @@ def chat(request: Request, req: ChatRequest):
     if not GROQ_API_KEY:
         raise HTTPException(status_code=503, detail="GROQ_API_KEY ayarlanmamış")
     prefs = db_get_preferences()
-    _, meal_data = chat_completion(req.message, req.history, prefs)
-    if meal_data:
-        return {"type": "meal", "data": _enrich_meal_data(meal_data)}
+    code, parsed_data = chat_completion(req.message, req.history, prefs)
+    if parsed_data:
+        if code == "__MEAL__":
+            return {"type": "meal", "data": _enrich_meal_data(parsed_data)}
+        elif code == "__SEARCH__":
+            return {"type": "action", "action": "open_recipe", "query": parsed_data["query"]}
     raise HTTPException(status_code=502, detail="Öneri oluşturulamadı, tekrar dene")
 
 
@@ -146,11 +149,17 @@ def chat_stream_endpoint(request: Request, req: ChatRequest):
             for token in chat_stream(req.message, req.history, prefs):
                 buffer += token
                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-            _, meal_data = parse_meal_response(buffer)
-            if not meal_data:
-                _, meal_data = chat_completion(req.message, req.history, prefs)
-            if meal_data:
-                payload = {"done": True, "type": "meal", "data": _enrich_meal_data(meal_data)}
+            code, parsed_data = parse_meal_response(buffer)
+            if not parsed_data:
+                code, parsed_data = chat_completion(req.message, req.history, prefs)
+            
+            if parsed_data:
+                if code == "__MEAL__":
+                    payload = {"done": True, "type": "meal", "data": _enrich_meal_data(parsed_data)}
+                elif code == "__SEARCH__":
+                    payload = {"done": True, "type": "action", "action": "open_recipe", "query": parsed_data["query"]}
+                else:
+                    payload = {"done": True, "type": "error", "error": "Geçersiz format."}
             else:
                 payload = {"done": True, "type": "error", "error": "Öneri oluşturulamadı, tekrar dene"}
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"

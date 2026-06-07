@@ -397,6 +397,10 @@ async function sendStream(msg) {
           const allMeals = Object.values(data.data).flatMap(cat => cat.items);
           pushHistory(msg, 'Önerilen yemekler: ' + allMeals.join(', ') + '. Bir sonraki istekte bunları tekrar önerme.');
           addMealCards(data.data);
+        } else if (data.type === 'action' && data.action === 'open_recipe') {
+          pushHistory(msg, `Sistem: ${data.query} tarifi arandı.`);
+          addUserMsg(`(🔍 ${data.query} aranıyor...)`);
+          openRecipeByName(data.query);
         } else {
           throw new Error(data.error || 'Öneri oluşturulamadı');
         }

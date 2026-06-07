@@ -9,7 +9,8 @@ from app.config import CATEGORY_ORDER, GROQ_API_KEY, MAX_HISTORY_MESSAGES, MODEL
 
 logger = logging.getLogger(__name__)
 
-MEAL_JSON_SCHEMA = """{
+MEAL_JSON_SCHEMA = """1. Genel yemek önerisi (örn: "ne yiyelim", "akşama fikir ver"):
+{
   "type": "meal_suggestion",
   "categories": {
     "tavuk":            ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
@@ -21,11 +22,17 @@ MEAL_JSON_SCHEMA = """{
     "fit_tatlilar":     ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
     "zararli_lezzetli": ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"]
   }
+}
+
+2. Spesifik bir yemek/tarif isteniyorsa (örn: "pilav öner", "tavuklu pilav tarifi ver"):
+{
+  "type": "recipe_search",
+  "query": "istenen yemek adı veya malzeme (ör: tavuklu pilav)"
 }"""
 
 
 def build_system_prompt(prefs: dict[str, str]) -> str:
-    return f"""Sen bir Türk yemek öneri motorusun. Görevin SADECE kategorilere ayrılmış yemek listesi üretmek.
+    return f"""Sen bir Türk yemek asistanısın. Görevin kullanıcının niyetini anlayıp SADECE uygun JSON'ı döndürmek.
 
 KULLANICI TERCİHLERİ:
 - Kişi sayısı: {prefs.get('person_count', '3')}
@@ -36,7 +43,7 @@ KULLANICI TERCİHLERİ:
 KESİNLİKLE ÖNERİLMEYECEKLER:
 - {prefs.get('dislikes', '')}
 
-KATEGORİLER:
+KATEGORİLER (Sadece meal_suggestion için):
 - tavuk: Tavuk yemekleri
 - kirmizi_et: Kırmızı et yemekleri (dana, kıyma vb.)
 - balik: Balık ve deniz ürünleri
@@ -47,13 +54,10 @@ KATEGORİLER:
 - zararli_lezzetli: Hamburger, pizza, kızartmalar, tatlılar — lezzetli ama "günah" yemekler :)
 
 KURALLAR:
-1. HER mesajda SADECE aşağıdaki JSON formatını döndür. Asla düz metin, açıklama veya tarif yazma.
-2. "ne yiyelim", "pilav tarifi ver", "tatlı öner", "fit bir şey" gibi TÜM yemek isteklerinde JSON döndür.
-3. "pilav tarifi ver" gibi spesifik isteklerde ilgili yemeği ve benzerlerini uygun kategorilere koy (ör. pilav → bakliyat).
-4. "tarifi ver/nasıl yapılır" isteklerinde tarif anlatma — sadece yemek ADLARI öner.
-5. Her kategoride tam 5 farklı yemek adı olsun.
-6. Her seferinde FARKLI yemekler öner, önceki önerileri tekrarlama.
-7. Yemekle ilgisiz mesajlarda bile en yakın kategorilerden öneri üret (genel sohbet yapma).
+1. HER mesajda SADECE aşağıdaki 2 JSON formatından birini döndür. Asla düz metin, açıklama veya tarif yazma.
+2. "ne yiyelim", "akşama fikir ver" gibi genel isteklerde 'meal_suggestion' döndür. Her kategoride FARKLI 5 yemek olsun.
+3. "pilav öner", "tavuklu pilav nasıl yapılır" gibi spesifik yemek sorularında 'recipe_search' döndür.
+4. Yemekle ilgisiz mesajlarda bile en mantıklı olanı (genelde meal_suggestion) üret, genel sohbet yapma.
 
 {MEAL_JSON_SCHEMA}
 """
@@ -80,14 +84,16 @@ def history_to_messages(history: list) -> list:
 def _extract_meal_json(raw: str) -> dict | None:
     clean = re.sub(r"```json|```", "", raw).strip()
     candidates = [clean]
-    match = re.search(r'\{[\s\S]*"type"\s*:\s*"meal_suggestion"[\s\S]*\}', raw)
+    match = re.search(r'\{[\s\S]*"type"\s*:\s*"(?:meal_suggestion|recipe_search)"[\s\S]*\}', raw)
     if match:
         candidates.append(match.group())
     for text in candidates:
         try:
             parsed = json.loads(text)
             if parsed.get("type") == "meal_suggestion" and parsed.get("categories"):
-                return parsed["categories"]
+                return {"type": "meal", "data": parsed["categories"]}
+            elif parsed.get("type") == "recipe_search" and parsed.get("query"):
+                return {"type": "search", "query": parsed["query"]}
         except (json.JSONDecodeError, TypeError):
             continue
     return None
@@ -105,11 +111,14 @@ def normalize_meal_categories(categories: dict) -> dict:
 
 
 def parse_meal_response(raw: str) -> tuple[str, dict | None]:
-    meal_data = _extract_meal_json(raw)
-    if meal_data:
-        meal_data = normalize_meal_categories(meal_data)
-        if meal_data:
-            return "__MEAL__", meal_data
+    extracted = _extract_meal_json(raw)
+    if extracted:
+        if extracted["type"] == "meal":
+            meal_data = normalize_meal_categories(extracted["data"])
+            if meal_data:
+                return "__MEAL__", meal_data
+        elif extracted["type"] == "search":
+            return "__SEARCH__", {"query": extracted["query"]}
     return raw, None
 
 
@@ -132,14 +141,14 @@ def _invoke_meal(message: str, history: list, prefs: dict[str, str]) -> str:
 
 def chat_completion(message: str, history: list, prefs: dict[str, str]) -> tuple[str, dict | None]:
     raw = _invoke_meal(message, history, prefs)
-    _, meal_data = parse_meal_response(raw)
-    if meal_data:
-        return "__MEAL__", meal_data
+    code, parsed_data = parse_meal_response(raw)
+    if parsed_data:
+        return code, parsed_data
 
     logger.warning("LLM returned non-JSON, retrying: %s", raw[:120])
     retry_msg = (
         f"{message}\n\n"
-        "[ZORUNLU: Sadece meal_suggestion JSON döndür. Düz metin, tarif anlatımı veya açıklama YAZMA.]"
+        "[ZORUNLU: Sadece meal_suggestion VEYA recipe_search JSON döndür. Düz metin veya açıklama YAZMA.]"
     )
     raw = _invoke_meal(retry_msg, history, prefs)
     return parse_meal_response(raw)
