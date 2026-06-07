@@ -13,6 +13,7 @@ MEAL_JSON_SCHEMA = """1. Genel yemek önerisi (örn: "ne yiyelim", "akşama fiki
 {
   "type": "meal_suggestion",
   "categories": {
+    "corbalar":         ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
     "tavuk":            ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
     "kirmizi_et":       ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
     "balik":            ["Yemek 1", "Yemek 2", "Yemek 3", "Yemek 4", "Yemek 5"],
@@ -44,6 +45,7 @@ KESİNLİKLE ÖNERİLMEYECEKLER:
 - {prefs.get('dislikes', '')}
 
 KATEGORİLER (Sadece meal_suggestion için):
+- corbalar: Başlangıçlar ve çorba çeşitleri
 - tavuk: Tavuk yemekleri
 - kirmizi_et: Kırmızı et yemekleri (dana, kıyma vb.)
 - balik: Balık ve deniz ürünleri

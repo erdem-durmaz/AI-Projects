@@ -311,7 +311,7 @@ function addMealCards(data) {
       const thumb = document.createElement('img');
       thumb.className = 'meal-thumb';
       thumb.loading = 'lazy';
-      thumb.src = `https://image.pollinations.ai/prompt/delicious%20turkish%20${encodeURIComponent(name)}%20food?width=120&height=120&nologo=true`;
+      thumb.src = `https://tse1.mm.bing.net/th?q=${encodeURIComponent(name)}+yemek+tarifi&w=120&h=120&c=7`;
 
       const nameEl = document.createElement('span');
       nameEl.className = 'meal-name';
@@ -559,7 +559,7 @@ function renderRecipeDrawer(recipe, fallbackName) {
 
   const cover = document.createElement('img');
   cover.className = 'recipe-cover-image';
-  cover.src = `https://image.pollinations.ai/prompt/delicious%20turkish%20${encodeURIComponent(name)}%20food?width=800&height=600&nologo=true`;
+  cover.src = `https://tse1.mm.bing.net/th?q=${encodeURIComponent(name)}+yemek+tarifi&w=800&h=600&c=7`;
   recipeContent.appendChild(cover);
 
   const title = document.createElement('div');

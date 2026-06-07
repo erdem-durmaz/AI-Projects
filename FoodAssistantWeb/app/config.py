@@ -29,6 +29,7 @@ SEARCH_SITES = [
 ]
 
 CATEGORY_ORDER = [
+    "corbalar",
     "tavuk",
     "kirmizi_et",
     "balik",
@@ -40,6 +41,7 @@ CATEGORY_ORDER = [
 ]
 
 CATEGORY_META = {
+    "corbalar": {"label": "Çorbalar", "emoji": "🍲", "color": "#fef3c7"},
     "tavuk": {"label": "Tavuk", "emoji": "🍗", "color": "#fff7ed"},
     "kirmizi_et": {"label": "Kırmızı Et", "emoji": "🥩", "color": "#fef2f2"},
     "balik": {"label": "Balık", "emoji": "🐟", "color": "#fdf4ff"},
