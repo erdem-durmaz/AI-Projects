@@ -13,7 +13,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_PATH}")
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
-MODEL_NAME = os.environ.get("MODEL_NAME", "gemini-1.5-pro")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gemini-1.5-flash")
 
 DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
 
