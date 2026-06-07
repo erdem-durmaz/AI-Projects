@@ -3,9 +3,9 @@ import logging
 import re
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 
-from app.config import CATEGORY_ORDER, GOOGLE_API_KEY, MAX_HISTORY_MESSAGES, MODEL_NAME
+from app.config import CATEGORY_ORDER, GROQ_API_KEY, MAX_HISTORY_MESSAGES, MODEL_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -124,36 +124,44 @@ def parse_meal_response(raw: str) -> tuple[str, dict | None]:
     return raw, None
 
 
-def get_llm(temperature: float = 1.0, max_tokens: int = 2000) -> ChatGoogleGenerativeAI:
-    return ChatGoogleGenerativeAI(
-        google_api_key=GOOGLE_API_KEY,
+def get_llm(temperature: float = 1.0, max_tokens: int = 2000) -> ChatGroq:
+    return ChatGroq(
+        api_key=GROQ_API_KEY,
         model=MODEL_NAME,
         temperature=temperature,
-        max_output_tokens=max_tokens,
+        max_tokens=max_tokens,
     )
 
 
-def _invoke_meal(message: str, history: list, prefs: dict[str, str]) -> str:
+def _invoke_meal(message: str, history: list, prefs: dict[str, str]) -> tuple[str, dict]:
     llm = get_llm()
     trimmed = trim_history(history)
     messages = [SystemMessage(content=build_system_prompt(prefs))] + history_to_messages(trimmed)
     messages.append(HumanMessage(content=message))
-    return llm.invoke(messages).content.strip()
+    response = llm.invoke(messages)
+    usage = response.usage_metadata or {}
+    return response.content.strip(), usage
 
 
-def chat_completion(message: str, history: list, prefs: dict[str, str]) -> tuple[str, dict | None]:
-    raw = _invoke_meal(message, history, prefs)
+def chat_completion(message: str, history: list, prefs: dict[str, str]) -> tuple[str, dict | None, dict]:
+    raw, usage = _invoke_meal(message, history, prefs)
     code, parsed_data = parse_meal_response(raw)
     if parsed_data:
-        return code, parsed_data
+        return code, parsed_data, usage
 
     logger.warning("LLM returned non-JSON, retrying: %s", raw[:120])
     retry_msg = (
         f"{message}\n\n"
         "[ZORUNLU: Sadece meal_suggestion VEYA recipe_search JSON döndür. Düz metin veya açıklama YAZMA.]"
     )
-    raw = _invoke_meal(retry_msg, history, prefs)
-    return parse_meal_response(raw)
+    raw2, usage2 = _invoke_meal(retry_msg, history, prefs)
+    code2, parsed_data2 = parse_meal_response(raw2)
+    
+    combined_usage = {
+        "input_tokens": usage.get("input_tokens", 0) + usage2.get("input_tokens", 0),
+        "output_tokens": usage.get("output_tokens", 0) + usage2.get("output_tokens", 0),
+    }
+    return code2, parsed_data2, combined_usage
 
 
 def chat_stream(message: str, history: list, prefs: dict[str, str]):
@@ -161,9 +169,13 @@ def chat_stream(message: str, history: list, prefs: dict[str, str]):
     trimmed = trim_history(history)
     messages = [SystemMessage(content=build_system_prompt(prefs))] + history_to_messages(trimmed)
     messages.append(HumanMessage(content=message))
+    usage = {}
     for chunk in llm.stream(messages):
         if chunk.content:
             yield chunk.content
+        if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+            usage = chunk.usage_metadata
+    yield usage
 
 
 def random_meal_name() -> str:

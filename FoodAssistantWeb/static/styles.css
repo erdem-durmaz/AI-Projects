@@ -34,27 +34,29 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; display: flex; flex-direction: column; transition: background 0.2s, color 0.2s; overflow-x: hidden; position: relative; }
+html { background: var(--bg); transition: background 0.2s; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: transparent; color: var(--text); min-height: 100dvh; display: flex; flex-direction: column; transition: color 0.2s; overflow-x: hidden; position: relative; z-index: 0; }
 body::before, body::after {
   content: '';
   position: fixed;
   z-index: -1;
   border-radius: 50%;
-  filter: blur(80px);
+  filter: blur(100px);
   opacity: 0.6;
+  pointer-events: none;
 }
 body::before {
-  top: -150px;
-  left: -100px;
-  width: 400px;
-  height: 400px;
+  top: -10vh;
+  left: -20vw;
+  width: 70vw;
+  height: 70vw;
   background: var(--accent);
 }
 body::after {
-  bottom: -150px;
-  right: -100px;
-  width: 400px;
-  height: 400px;
+  bottom: -10vh;
+  right: -20vw;
+  width: 70vw;
+  height: 70vw;
   background: #a855f7;
 }
 [data-theme="dark"] body::before {

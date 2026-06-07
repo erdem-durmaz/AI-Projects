@@ -410,9 +410,22 @@ async function sendStream(msg) {
           const allMeals = Object.values(data.data).flatMap(cat => cat.items);
           pushHistory(msg, 'Önerilen yemekler: ' + allMeals.join(', ') + '. Bir sonraki istekte bunları tekrar önerme.');
           addMealCards(data.data);
+          if (data.usage && data.usage.total_tokens) {
+            const u = document.createElement('div');
+            u.style = "font-size: 11px; color: var(--text-muted); text-align: right; margin-top: -10px; margin-bottom: 12px; margin-right: 12px;";
+            u.innerHTML = `⚡ In: ${data.usage.input_tokens || 0} | Out: ${data.usage.output_tokens || 0} | Total: ${data.usage.total_tokens}`;
+            msgEl.appendChild(u);
+            scrollBot();
+          }
         } else if (data.type === 'action' && data.action === 'open_recipe') {
           pushHistory(msg, `Sistem: ${data.query} tarifi arandı.`);
           const msgNode = addBotMsg(`🔍 ${data.query} aranıyor...`);
+          if (data.usage && data.usage.total_tokens) {
+            const u = document.createElement('div');
+            u.style = "font-size: 11px; color: var(--text-muted); text-align: right; margin-top: 4px;";
+            u.innerHTML = `⚡ In: ${data.usage.input_tokens || 0} | Out: ${data.usage.output_tokens || 0} | Total: ${data.usage.total_tokens}`;
+            msgNode.parentNode.appendChild(u);
+          }
           openRecipeByName(data.query).then(() => {
             msgNode.textContent = `✅ ${data.query} tarifi bulundu ve ekranda açıldı.`;
           }).catch(() => {
