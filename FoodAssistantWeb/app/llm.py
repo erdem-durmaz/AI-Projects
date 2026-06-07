@@ -3,9 +3,9 @@ import logging
 import re
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 
-from app.config import CATEGORY_ORDER, GROQ_API_KEY, MAX_HISTORY_MESSAGES, MODEL_NAME
+from app.config import CATEGORY_ORDER, GOOGLE_API_KEY, MAX_HISTORY_MESSAGES, MODEL_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -124,12 +124,12 @@ def parse_meal_response(raw: str) -> tuple[str, dict | None]:
     return raw, None
 
 
-def get_llm(temperature: float = 1.0, max_tokens: int = 2000) -> ChatGroq:
-    return ChatGroq(
-        api_key=GROQ_API_KEY,
+def get_llm(temperature: float = 1.0, max_tokens: int = 2000) -> ChatGoogleGenerativeAI:
+    return ChatGoogleGenerativeAI(
+        google_api_key=GOOGLE_API_KEY,
         model=MODEL_NAME,
         temperature=temperature,
-        max_tokens=max_tokens,
+        max_output_tokens=max_tokens,
     )
 
 

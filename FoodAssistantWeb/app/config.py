@@ -11,9 +11,9 @@ DB_PATH = BASE_DIR / "favorites.db"
 
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_PATH}")
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
-MODEL_NAME = os.environ.get("MODEL_NAME", "llama-3.3-70b-versatile")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gemini-1.5-pro")
 
 DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
 
