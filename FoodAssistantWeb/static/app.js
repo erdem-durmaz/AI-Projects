@@ -308,6 +308,11 @@ function addMealCards(data) {
       item.draggable = true;
       item.dataset.name = name;
 
+      const thumb = document.createElement('img');
+      thumb.className = 'meal-thumb';
+      thumb.loading = 'lazy';
+      thumb.src = `https://image.pollinations.ai/prompt/delicious%20turkish%20${encodeURIComponent(name)}%20food?width=120&height=120&nologo=true`;
+
       const nameEl = document.createElement('span');
       nameEl.className = 'meal-name';
       nameEl.textContent = name;
@@ -351,6 +356,7 @@ function addMealCards(data) {
       actions.appendChild(recipeBtn);
       actions.appendChild(planBtn);
       actions.appendChild(btn);
+      item.appendChild(thumb);
       item.appendChild(nameEl);
       item.appendChild(actions);
       card.appendChild(item);
@@ -550,6 +556,11 @@ function renderRecipeDrawer(recipe, fallbackName) {
   closeBtn.textContent = '×';
   closeBtn.addEventListener('click', closeRecipe);
   recipeContent.appendChild(closeBtn);
+
+  const cover = document.createElement('img');
+  cover.className = 'recipe-cover-image';
+  cover.src = `https://image.pollinations.ai/prompt/delicious%20turkish%20${encodeURIComponent(name)}%20food?width=800&height=600&nologo=true`;
+  recipeContent.appendChild(cover);
 
   const title = document.createElement('div');
   title.className = 'recipe-title';
