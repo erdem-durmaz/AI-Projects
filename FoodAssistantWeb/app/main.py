@@ -9,7 +9,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from app.config import CATEGORY_META, CATEGORY_ORDER, DAYS, GROQ_API_KEY, STATIC_DIR, TAVILY_API_KEY
+from app.config import CATEGORY_META, CATEGORY_ORDER, DAYS, GOOGLE_API_KEY, STATIC_DIR, TAVILY_API_KEY
 from app.db import (
     db_add_custom_recipe,
     db_add_favorite,
@@ -60,8 +60,8 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    if not GROQ_API_KEY:
-        logger.warning("GROQ_API_KEY is not set — chat will not work")
+    if not GOOGLE_API_KEY:
+        logger.warning("GOOGLE_API_KEY is not set - chat will not work")
     if not TAVILY_API_KEY:
         logger.warning("TAVILY_API_KEY is not set — search will not work")
     yield
@@ -124,8 +124,8 @@ def _enrich_meal_data(meal_data: dict) -> dict:
 @app.post("/chat")
 @limiter.limit("30/minute")
 def chat(request: Request, req: ChatRequest):
-    if not GROQ_API_KEY:
-        raise HTTPException(status_code=503, detail="GROQ_API_KEY ayarlanmamış")
+    if not GOOGLE_API_KEY:
+        raise HTTPException(status_code=503, detail="GOOGLE_API_KEY ayarlanmamış")
     prefs = db_get_preferences()
     code, parsed_data = chat_completion(req.message, req.history, prefs)
     if parsed_data:
@@ -139,8 +139,8 @@ def chat(request: Request, req: ChatRequest):
 @app.post("/chat/stream")
 @limiter.limit("30/minute")
 def chat_stream_endpoint(request: Request, req: ChatRequest):
-    if not GROQ_API_KEY:
-        raise HTTPException(status_code=503, detail="GROQ_API_KEY ayarlanmamış")
+    if not GOOGLE_API_KEY:
+        raise HTTPException(status_code=503, detail="GOOGLE_API_KEY ayarlanmamış")
     prefs = db_get_preferences()
 
     def generate():
