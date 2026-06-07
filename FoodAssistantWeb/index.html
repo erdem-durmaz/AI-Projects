@@ -172,6 +172,56 @@ header .sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
 .meal-item { touch-action: pan-y; }
 .meal-item .plan-btn { background:none; border:none; font-size:15px; cursor:pointer; padding:2px 3px; border-radius:5px; transition:transform 0.12s; line-height:1; color:var(--muted); margin-right:2px; }
 .meal-item .plan-btn:hover { transform:scale(1.2); color:var(--accent); }
+
+/* ── SEARCH PANEL ── */
+#search-panel { overflow-y:auto; padding:16px; gap:14px; }
+.search-top { display:flex; gap:8px; align-items:center; margin-bottom:4px; }
+#search-input { flex:1; border:1.5px solid var(--border); border-radius:20px; padding:9px 15px; font-size:14px; font-family:inherit; outline:none; background:var(--bg); color:var(--text); transition:border-color 0.18s; }
+#search-input:focus { border-color:var(--accent); }
+#discover-btn { background:var(--accent); color:#fff; border:none; border-radius:20px; padding:9px 16px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background 0.15s; flex-shrink:0; }
+#discover-btn:hover { background:var(--accent-dark); }
+#discover-btn:disabled { background:#cbd5e1; cursor:default; }
+.search-hint { font-size:11px; color:var(--muted); margin-bottom:10px; }
+
+#search-results { display:flex; flex-direction:column; gap:8px; }
+.search-item { background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:13px 14px; display:flex; align-items:center; gap:10px; cursor:pointer; transition:border-color 0.15s, box-shadow 0.15s; box-shadow:var(--shadow); }
+.search-item:hover { border-color:var(--accent); box-shadow:var(--shadow-lg); }
+.search-item-name { flex:1; font-size:14px; font-weight:600; }
+.search-item-source { font-size:11px; color:var(--muted); margin-top:2px; }
+.search-item-arrow { color:var(--muted); font-size:16px; flex-shrink:0; }
+.search-item-star { background:none; border:none; font-size:18px; cursor:pointer; padding:2px 4px; border-radius:5px; transition:transform 0.12s; line-height:1; flex-shrink:0; }
+.search-item-star:hover { transform:scale(1.2); }
+.search-item-star.added { opacity:0.35; pointer-events:none; }
+
+.search-empty { text-align:center; padding:40px 0; color:var(--muted); }
+.search-empty .icon { font-size:36px; margin-bottom:10px; }
+.search-loading { text-align:center; padding:32px 0; color:var(--muted); font-size:14px; }
+.search-loading .spinner { font-size:28px; display:block; margin-bottom:8px; animation:spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* ── RECIPE DRAWER ── */
+#recipe-drawer { position:fixed; inset:0; z-index:600; display:none; }
+#recipe-drawer.open { display:block; }
+#recipe-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.4); }
+#recipe-panel { position:absolute; right:0; top:0; bottom:0; width:min(420px, 100%); background:var(--surface); overflow-y:auto; padding:24px 18px 40px; animation:slideRight 0.22s ease; box-shadow:var(--shadow-lg); }
+@keyframes slideRight { from { transform:translateX(60px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+@media(max-width:480px) { #recipe-panel { width:100%; border-radius:20px 20px 0 0; top:auto; bottom:0; height:88dvh; animation:slideUp 0.22s ease; } }
+
+.recipe-close { background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted); float:right; padding:2px 4px; border-radius:6px; }
+.recipe-close:hover { color:var(--text); }
+.recipe-title { font-size:18px; font-weight:700; margin:8px 0 4px; clear:both; }
+.recipe-meta { font-size:12px; color:var(--muted); margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; }
+.recipe-meta span { display:flex; align-items:center; gap:3px; }
+.recipe-section-title { font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; margin:16px 0 8px; }
+.recipe-ingredients { list-style:none; display:flex; flex-direction:column; gap:5px; }
+.recipe-ingredients li { font-size:13px; padding:6px 10px; background:var(--bg); border-radius:7px; }
+.recipe-steps { list-style:none; display:flex; flex-direction:column; gap:8px; counter-reset:steps; }
+.recipe-steps li { font-size:13px; line-height:1.55; padding:8px 12px 8px 36px; background:var(--bg); border-radius:8px; position:relative; counter-increment:steps; }
+.recipe-steps li::before { content:counter(steps); position:absolute; left:10px; top:8px; font-size:11px; font-weight:700; color:var(--accent); }
+.recipe-add-btn { width:100%; margin-top:20px; background:var(--accent); color:#fff; border:none; border-radius:12px; padding:13px; font-size:14px; font-weight:700; cursor:pointer; transition:background 0.15s; }
+.recipe-add-btn:hover { background:var(--accent-dark); }
+.recipe-add-btn.added { background:#22c55e; cursor:default; }
+.recipe-error { text-align:center; padding:32px 0; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -187,6 +237,7 @@ header .sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
 <div class="tabs">
   <div class="tab active" data-tab="chat">💬 Sohbet</div>
   <div class="tab" data-tab="fav">📅 Plan & Favoriler <span id="fav-badge"></span></div>
+  <div class="tab" data-tab="search">🔍 Keşfet</div>
 </div>
 
 <!-- CHAT -->
@@ -228,6 +279,30 @@ header .sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
     <p>Henüz favori yok</p>
   </div>
 
+</div>
+
+<!-- KEŞFET PANEL -->
+<div id="search-panel" class="panel">
+  <div class="search-top">
+    <input id="search-input" type="text" placeholder="Yemek ara... (boş bırakırsan rastgele önerir)">
+    <button id="discover-btn">🔍 Öner</button>
+  </div>
+  <div class="search-hint">yemek.com · nefisyemektarifleri.com · lezzet.com.tr</div>
+  <div id="search-results">
+    <div class="search-empty">
+      <div class="icon">🍽️</div>
+      <p>Keşfetmeye hazır mısın?</p>
+    </div>
+  </div>
+</div>
+
+<!-- TARİF DRAWER -->
+<div id="recipe-drawer">
+  <div id="recipe-overlay"></div>
+  <div id="recipe-panel">
+    <button class="recipe-close" id="recipe-close">×</button>
+    <div id="recipe-content"></div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -598,6 +673,181 @@ function openDayModal(mealName) {
     modalGrid.appendChild(btn);
   });
   modalBg.classList.add('open');
+}
+
+// ── SEARCH & RECIPE ────────────────────────────────────────────────────────
+const discoverBtn   = document.getElementById('discover-btn');
+const searchInput   = document.getElementById('search-input');
+const searchResults = document.getElementById('search-results');
+const recipeDrawer  = document.getElementById('recipe-drawer');
+const recipeContent = document.getElementById('recipe-content');
+
+document.getElementById('recipe-close').addEventListener('click', closeRecipe);
+document.getElementById('recipe-overlay').addEventListener('click', closeRecipe);
+
+function closeRecipe() { recipeDrawer.classList.remove('open'); }
+
+discoverBtn.addEventListener('click', doSearch);
+searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+async function doSearch() {
+  const query = searchInput.value.trim();
+  discoverBtn.disabled = true;
+  searchResults.innerHTML = '<div class="search-loading"><span class="spinner">🔄</span>Aranıyor...</div>';
+  try {
+    const res = await api('/search', { query });
+    renderSearchResults(res.results || []);
+  } catch(e) {
+    searchResults.innerHTML = '<div class="search-empty"><div class="icon">⚠️</div><p>Bir hata oluştu</p></div>';
+  }
+  discoverBtn.disabled = false;
+}
+
+function renderSearchResults(results) {
+  if (!results.length) {
+    searchResults.innerHTML = '<div class="search-empty"><div class="icon">🤷</div><p>Sonuç bulunamadı</p></div>';
+    return;
+  }
+  searchResults.innerHTML = '';
+  results.forEach(r => {
+    const item = document.createElement('div');
+    item.className = 'search-item';
+
+    const source = new URL(r.url).hostname.replace('www.', '');
+    const isFav = S.favorites.includes(r.name);
+
+    item.innerHTML = `
+      <div style="flex:1;min-width:0">
+        <div class="search-item-name">${r.name}</div>
+        <div class="search-item-source">${source}</div>
+      </div>
+      <button class="search-item-star ${isFav ? 'added' : ''}" title="Favoriye ekle">${isFav ? '✅' : '⭐'}</button>
+      <span class="search-item-arrow">›</span>
+    `;
+
+    // Star button
+    const starBtn = item.querySelector('.search-item-star');
+    starBtn.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (starBtn.classList.contains('added')) return;
+      await addFavorite(r.name);
+      starBtn.classList.add('added');
+      starBtn.textContent = '✅';
+    });
+
+    // Click → open recipe
+    item.addEventListener('click', () => openRecipe(r));
+
+    searchResults.appendChild(item);
+  });
+}
+
+async function openRecipe(r) {
+  recipeContent.innerHTML = '<div class="search-loading"><span class="spinner">🔄</span>Yükleniyor...</div>';
+  recipeDrawer.classList.add('open');
+  try {
+    const res = await api('/recipe', { url: r.url });
+    const result = res.result;
+    if (result.type === 'error') {
+      recipeContent.innerHTML = `<div class="recipe-error"><div style="font-size:32px;margin-bottom:8px">⚠️</div><p>${result.error}</p></div>`;
+    } else if (result.type === 'list') {
+      renderListDrawer(result.items, r);
+    } else {
+      renderRecipeDrawer(result, r.name);
+    }
+  } catch(e) {
+    recipeContent.innerHTML = '<div class="recipe-error"><div style="font-size:32px;margin-bottom:8px">⚠️</div><p>Yüklenemedi</p></div>';
+  }
+}
+
+function renderListDrawer(items, sourceResult) {
+  let html = `
+    <button class="recipe-close" id="recipe-close2">×</button>
+    <div class="recipe-title" style="font-size:15px">📋 Bu sayfadaki yemekler</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${new URL(sourceResult.url).hostname.replace('www.','')}</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+  `;
+  items.forEach(name => {
+    const isFav = S.favorites.includes(name);
+    html += `
+      <div class="search-item" data-name="${name}" style="cursor:pointer">
+        <div style="flex:1"><div class="search-item-name">${name}</div></div>
+        <button class="search-item-star ${isFav ? 'added' : ''}" data-meal="${name}">${isFav ? '✅' : '⭐'}</button>
+        <span class="search-item-arrow">›</span>
+      </div>
+    `;
+  });
+  html += '</div>';
+  recipeContent.innerHTML = html;
+
+  document.getElementById('recipe-close2').addEventListener('click', closeRecipe);
+
+  // Yıldız butonları
+  recipeContent.querySelectorAll('.search-item-star').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (btn.classList.contains('added')) return;
+      const name = btn.dataset.meal;
+      await addFavorite(name);
+      btn.classList.add('added'); btn.textContent = '✅';
+    });
+  });
+
+  // Yemek kartına tıklayınca o yemeği aratıp tarif aç
+  recipeContent.querySelectorAll('.search-item').forEach(item => {
+    item.addEventListener('click', async e => {
+      if (e.target.classList.contains('search-item-star')) return;
+      const name = item.dataset.name;
+      recipeContent.innerHTML = '<div class="search-loading"><span class="spinner">🔄</span>Tarif aranıyor...</div>';
+      // Tavily'de bu yemeği ara, ilk sonucun tarifini aç
+      // Yemek adına göre direkt tarif bul
+      const recRes = await api('/recipe_by_name', { name });
+      const result = recRes.result;
+      if (result.type === 'recipe') {
+        renderRecipeDrawer(result, name);
+      } else if (result.type === 'list') {
+        renderListDrawer(result.items, { url: result.source_url || '#', name });
+      } else {
+        recipeContent.innerHTML = `<div class="recipe-error"><div style="font-size:32px;margin-bottom:8px">🤷</div><p>"${name}" için tarif bulunamadı</p></div>`;
+      }
+    });
+  });
+}
+
+function renderRecipeDrawer(recipe, fallbackName) {
+  const isFav = S.favorites.includes(recipe.name || fallbackName);
+  const name  = recipe.name || fallbackName;
+  let html = `
+    <button class="recipe-close" id="recipe-close2">×</button>
+    <div class="recipe-title">${name}</div>
+    <div class="recipe-meta">
+      ${recipe.time     ? `<span>⏱ ${recipe.time}</span>` : ''}
+      ${recipe.servings ? `<span>👥 ${recipe.servings}</span>` : ''}
+    </div>
+  `;
+  if (recipe.ingredients?.length) {
+    html += '<div class="recipe-section-title">Malzemeler</div><ul class="recipe-ingredients">';
+    recipe.ingredients.forEach(ing => { html += `<li>${ing}</li>`; });
+    html += '</ul>';
+  }
+  if (recipe.steps?.length) {
+    html += '<div class="recipe-section-title">Yapılışı</div><ol class="recipe-steps">';
+    recipe.steps.forEach(step => { html += `<li>${step}</li>`; });
+    html += '</ol>';
+  }
+  html += `<button class="recipe-add-btn ${isFav ? 'added' : ''}" id="recipe-fav-btn">
+    ${isFav ? '✅ Favorilere Eklendi' : '⭐ Favorilere Ekle'}
+  </button>`;
+  recipeContent.innerHTML = html;
+  document.getElementById('recipe-close2').addEventListener('click', closeRecipe);
+  const favBtn = document.getElementById('recipe-fav-btn');
+  if (!isFav) {
+    favBtn.addEventListener('click', async () => {
+      await addFavorite(name);
+      favBtn.classList.add('added');
+      favBtn.textContent = '✅ Favorilere Eklendi';
+    });
+  }
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
