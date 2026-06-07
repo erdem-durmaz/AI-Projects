@@ -42,8 +42,17 @@ header .sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
 
 /* ── CHAT ── */
 #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
-.msg { max-width: 84%; padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.55; animation: fadeUp 0.18s ease; }
-.msg.user { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+
+.msg-wrapper { display: flex; align-items: flex-end; gap: 6px; animation: fadeUp 0.18s ease; }
+.msg-wrapper.user { flex-direction: row-reverse; align-self: flex-end; max-width: 90%; }
+.msg-wrapper.bot  { align-self: flex-start; max-width: 90%; }
+.msg { max-width: 100%; padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.55; }
+.msg.user { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg.bot  { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; box-shadow: var(--shadow); }
+.msg-fav-btn { background: none; border: none; font-size: 17px; cursor: pointer; padding: 3px; opacity: 0; transition: opacity 0.15s, transform 0.12s; flex-shrink: 0; line-height: 1; border-radius: 6px; }
+.msg-wrapper:hover .msg-fav-btn { opacity: 1; }
+.msg-fav-btn:hover { transform: scale(1.2); }
+.msg-fav-btn.added { opacity: 0.4 !important; pointer-events: none; }
 .msg.bot { background: var(--surface); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: var(--shadow); }
 .msg.typing { opacity: 0.5; }
 
@@ -391,13 +400,43 @@ sendB.addEventListener('click', send);
 
 function scrollBot() { setTimeout(() => msgEl.scrollTop = msgEl.scrollHeight, 40); }
 
-function addMsg(role, text) {
-  const d = document.createElement('div');
-  d.className = 'msg ' + role;
-  d.textContent = text;
-  msgEl.appendChild(d);
-  scrollBot();
-  return d;
+function addMsg(role, text, opts={}) {
+  if (role === 'user') {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg-wrapper user';
+
+    const d = document.createElement('div');
+    d.className = 'msg user';
+    d.textContent = text;
+
+    const favBtn = document.createElement('button');
+    favBtn.className = 'msg-fav-btn';
+    favBtn.textContent = S.favorites.includes(text) ? '✅' : '⭐';
+    if (S.favorites.includes(text)) favBtn.classList.add('added');
+    favBtn.title = 'Favoriye ekle';
+    favBtn.addEventListener('click', async () => {
+      if (favBtn.classList.contains('added')) return;
+      await addFavorite(text);
+      favBtn.textContent = '✅';
+      favBtn.classList.add('added');
+    });
+
+    wrapper.appendChild(d);
+    wrapper.appendChild(favBtn);
+    msgEl.appendChild(wrapper);
+    scrollBot();
+    return wrapper;
+  } else {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg-wrapper bot';
+    const d = document.createElement('div');
+    d.className = 'msg bot' + (role.includes('typing') ? ' typing' : '');
+    d.textContent = text;
+    wrapper.appendChild(d);
+    msgEl.appendChild(wrapper);
+    scrollBot();
+    return wrapper;
+  }
 }
 
 function addMealCards(data) {
