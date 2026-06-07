@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#2563eb">
+<meta name="description" content="AI destekli Türk yemek asistanı — öneri, plan ve tarif keşfi">
+<link rel="manifest" href="/manifest.json">
+<link rel="stylesheet" href="/static/styles.css?v=4">
+<title>Yemek Asistanı</title>
+</head>
+<body>
+
+<header>
+  <div class="logo">🍽️</div>
+  <div>
+    <h1>Yemek Asistanı</h1>
+    <div class="sub">Ne yiyelim bugün?</div>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="theme-btn" title="Tema değiştir">🌙</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="chat">🍽️ Öner</div>
+  <div class="tab" data-tab="fav">📅 Plan <span id="fav-badge"></span></div>
+  <div class="tab" data-tab="myrecipes">📒 Tariflerim <span id="myrecipes-badge"></span></div>
+  <div class="tab" data-tab="settings">⚙️ Ayarlar</div>
+</div>
+
+<div id="chat-panel" class="panel active">
+  <div id="messages">
+    <div id="messages-empty" class="suggest-empty">
+      <div class="icon">🍽️</div>
+      <p>Ne yiyelim, pilav öner, fit tatlı ver...</p>
+      <span class="suggest-hint">📖 tarif · ⭐ favori · 📅 plan</span>
+    </div>
+  </div>
+  <div class="input-area">
+    <textarea id="msg-input" placeholder="Ne yemek istersin?" rows="1"></textarea>
+    <button id="send-btn" aria-label="Öner">
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="fav-panel" class="panel">
+  <div class="section-title">
+    📅 Haftalık Plan
+    <button class="clear-btn" id="clear-plan-btn">Temizle</button>
+  </div>
+  <div id="week-grid"></div>
+  <div class="plan-hint">Bir güne birden fazla yemek ekleyebilirsin — sürükle, 📅 ile ekle, chip üzerindeki × ile tek tek sil</div>
+  <div class="divider" style="margin:16px 0 12px"></div>
+  <div class="fav-header">
+    <div class="section-title" style="margin:0">⭐ Favorilerim</div>
+    <span class="fav-count" id="fav-count">0</span>
+  </div>
+  <div class="fav-hint-row">☰ Sırala &nbsp;·&nbsp; 📖 Tarif &nbsp;·&nbsp; ⭐ Favori &nbsp;·&nbsp; 📅 Plan</div>
+  <div id="fav-list"></div>
+  <div id="fav-drop-zone">⭐ Buraya bırak → Favorilere ekle</div>
+  <div id="fav-empty" class="empty-favs" style="display:none">
+    <div class="icon">⭐</div>
+    <p>Henüz favori yok</p>
+  </div>
+</div>
+
+<div id="myrecipes-panel" class="panel">
+  <div class="myrecipes-header">
+    <div class="section-title" style="margin:0">📒 Kendi Tariflerim</div>
+    <button class="add-recipe-btn" id="toggle-recipe-form">+ Yeni</button>
+  </div>
+  <p class="settings-hint">Kendi bulduğun tarifleri kaydet — arama ve tarif görüntülemede öncelikli kullanılır.</p>
+
+  <form id="recipe-form" class="recipe-form hidden" onsubmit="return false">
+    <input type="hidden" id="recipe-edit-id" value="">
+    <div class="form-group">
+      <label for="recipe-name">Yemek Adı</label>
+      <input id="recipe-name" type="text" placeholder="Örn: Fırında Tavuk But" required>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="recipe-time">Süre</label>
+        <input id="recipe-time" type="text" placeholder="45 dk">
+      </div>
+      <div class="form-group">
+        <label for="recipe-servings">Porsiyon</label>
+        <input id="recipe-servings" type="text" placeholder="4 kişilik">
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="recipe-ingredients">Malzemeler <span class="label-hint">(her satıra bir malzeme)</span></label>
+      <textarea id="recipe-ingredients" placeholder="2 adet tavuk but&#10;1 yemek kaşığı zeytinyağı&#10;..." rows="5"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="recipe-steps">Yapılış <span class="label-hint">(her satıra bir adım)</span></label>
+      <textarea id="recipe-steps" placeholder="Fırını 180°C'ye ısıtın.&#10;Tavukları marine edin.&#10;..." rows="6"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="recipe-notes">Notlar <span class="label-hint">(opsiyonel)</span></label>
+      <textarea id="recipe-notes" placeholder="İpucu, saklama önerisi..." rows="2"></textarea>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="save-btn" id="save-recipe-btn">Kaydet</button>
+      <button type="button" class="cancel-btn" id="cancel-recipe-btn">İptal</button>
+    </div>
+  </form>
+
+  <div id="myrecipes-list"></div>
+  <div id="myrecipes-empty" class="empty-favs">
+    <div class="icon">📒</div>
+    <p>Henüz kayıtlı tarif yok</p>
+  </div>
+</div>
+
+<div id="settings-panel" class="panel">
+  <div class="section-title">⚙️ Yemek Tercihleri</div>
+  <p class="settings-hint">Bu ayarlar öneri listesini kişiselleştirir.</p>
+  <form class="settings-form" onsubmit="return false">
+    <div class="form-group">
+      <label for="pref-person-count">Kişi Sayısı</label>
+      <input id="pref-person-count" type="text" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label for="pref-meal-type">Öğün</label>
+      <input id="pref-meal-type" type="text" placeholder="Akşam yemeği">
+    </div>
+    <div class="form-group">
+      <label for="pref-style">Tarz</label>
+      <input id="pref-style" type="text" placeholder="Ev yemeği, pratik, fit...">
+    </div>
+    <div class="form-group">
+      <label for="pref-preferences">Tercihler</label>
+      <textarea id="pref-preferences" placeholder="Proteinli, glutensiz, sebze ağırlıklı..."></textarea>
+    </div>
+    <div class="form-group">
+      <label for="pref-dislikes">Önerilmeyecekler</label>
+      <textarea id="pref-dislikes" placeholder="Sevmediğin yemekler, malzemeler..."></textarea>
+    </div>
+    <button type="button" class="save-btn" id="save-prefs-btn">Kaydet</button>
+  </form>
+</div>
+
+<div id="recipe-drawer">
+  <div id="recipe-overlay"></div>
+  <div id="recipe-panel">
+    <button class="recipe-close" id="recipe-close">×</button>
+    <div id="recipe-content"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="day-modal-bg">
+  <div id="day-modal">
+    <h3>📅 Güne Ekle</h3>
+    <div class="meal-label" id="modal-meal-label"></div>
+    <div class="day-grid" id="modal-day-grid"></div>
+    <button class="modal-cancel" id="modal-cancel">İptal</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="/static/app.js?v=4"></script>
+</body>
+</html>
