@@ -219,13 +219,15 @@ Başka hiçbir şey yazma, sadece JSON döndür.
     return json.loads(parsed)
 
 
-def get_daily_suggestion(prefs: dict[str, str], weekly_plan: dict[str, list[str]], favorites: list[str]) -> dict:
-    llm = get_llm(temperature=0.7, max_tokens=800)
-    
-    plan_text = json.dumps(weekly_plan, ensure_ascii=False)
-    fav_text = ", ".join(favorites) if favorites else "Henüz favori yok"
+def get_daily_suggestion(prefs: dict[str, str], weekly_plan: dict[str, list[str]], favorites: list[str], chef_specials: list[str]) -> dict:
+    try:
+        llm = get_llm(temperature=0.7, max_tokens=800)
+        
+        plan_text = json.dumps(weekly_plan, ensure_ascii=False)
+        fav_text = ", ".join(favorites) if favorites else "Henüz favori yok"
+        chef_text = ", ".join(chef_specials) if chef_specials else "Henüz şefin spesyali yok"
 
-    prompt = f"""Kullanıcı için 'Bugünün Önerisi' olarak TEK bir ana yemek ve 2-3 alternatif yan yemek/farklı seçenek üret.
+        prompt = f"""Kullanıcı için 'Bugünün Önerisi' olarak TEK bir ana yemek ve 2-3 alternatif yan yemek/farklı seçenek üret.
 SADECE aşağıdaki JSON formatında döndür.
 
 KULLANICI TERCİHLERİ:
@@ -241,10 +243,13 @@ HAFTALIK PLAN (Bu hafta seçilen yemekler):
 FAVORİ YEMEKLERİ:
 {fav_text}
 
+ŞEFİN SPESYALİ YEMEKLERİ (Kullanıcının en çok güvendiği veya en sevdiği kendi özel tarifleri):
+{chef_text}
+
 GÖREV ve KISITLAMALAR:
 1. Bugün için "featured" (Öne Çıkan) 1 yemek seç.
    - Haftalık plandaki yemeklere benzemesin (örneğin planda tavuk varsa bugün balık veya sebze öner).
-   - Kullanıcının favorilerinden (FAVORİ YEMEKLERİ) BİRİNİ de seçebilirsin, veya tamamen yeni bir şey önerebilirsin.
+   - Öncelikle kullanıcının ŞEFİN SPESYALİ YEMEKLERİ arasından bir yemek seçmeye çalış (eğer bu listede yemek varsa öne çıkarılmaya son derece uygundur). Yoksa FAVORİ YEMEKLERİ listesini değerlendir, o da yoksa veya uymuyorsa tamamen yeni bir şey önerebilirsin.
 2. "alternatives" olarak 2 veya 3 farklı yemek daha ekle.
 3. SADECE JSON DÖNDÜR, asla başka metin yazma.
 
@@ -266,13 +271,62 @@ GÖREV ve KISITLAMALAR:
   ]
 }}
 """
-    response = llm.invoke([HumanMessage(content=prompt)]).content.strip()
-    parsed = re.sub(r"```json|```", "", response).strip()
-    try:
+        response = llm.invoke([HumanMessage(content=prompt)]).content.strip()
+        parsed = re.sub(r"```json|```", "", response).strip()
         return json.loads(parsed)
     except Exception as e:
-        logger.error(f"Daily suggestion parse error: {{e}}")
-        return {
-            "featured": {"name": "Günün Yemeği", "description": "Harika bir öneri", "time": "45 dk", "difficulty": "Orta"},
-            "alternatives": []
-        }
+        logger.error(f"Daily suggestion generation failed: {e}")
+        # Prioritize chef specials, then favorites for offline fallback
+        pool = list(chef_specials) if chef_specials else list(favorites)
+        if pool:
+            import random
+            pool_copy = list(pool)
+            random.shuffle(pool_copy)
+            featured_name = pool_copy[0]
+            
+            # Find alternatives from the remaining pool or fallback defaults
+            remaining = [n for n in (chef_specials + favorites) if n != featured_name]
+            # Deduplicate while preserving order
+            seen = set()
+            alt_names = []
+            for item in remaining:
+                if item not in seen:
+                    seen.add(item)
+                    alt_names.append(item)
+            alt_names = alt_names[:3]
+            
+            if len(alt_names) < 2:
+                for fallback in ["Mercimek Çorbası", "Zeytinyağlı Taze Fasulye", "Fırında Tavuk Baget"]:
+                    if fallback != featured_name and fallback not in seen:
+                        alt_names.append(fallback)
+                        seen.add(fallback)
+            
+            desc = "Şefin spesyali olan bu özel tarifi bugün denemeye ne dersiniz? (Çevrimdışı mod)" if featured_name in chef_specials else "Favorilerinizden seçilen lezzetli bir günün önerisi (Çevrimdışı mod)"
+            
+            return {
+                "featured": {
+                    "name": featured_name,
+                    "description": desc,
+                    "time": "Plana göre",
+                    "difficulty": "Kolay"
+                },
+                "alternatives": [
+                    {"name": name, "description": "Özel tariflerinizden biri" if name in (chef_specials + favorites) else "Lezzetli bir alternatif", "time": "Pratik", "difficulty": "Kolay"}
+                    for name in alt_names
+                ]
+            }
+        else:
+            return {
+                "featured": {
+                    "name": "Mercimek Çorbası & Ev Köftesi",
+                    "description": "Herkesin sevdiği klasik Türk lezzeti (Limit aşımı / Çevrimdışı mod)",
+                    "time": "45 dk",
+                    "difficulty": "Kolay"
+                },
+                "alternatives": [
+                    {"name": "Zeytinyağlı Taze Fasulye", "description": "Hafif ve sağlıklı sebze yemeği alternatifi", "time": "35 dk", "difficulty": "Kolay"},
+                    {"name": "Fırında Tavuk Baget", "description": "Pratik ve lezzetli protein alternatifiniz", "time": "50 dk", "difficulty": "Orta"}
+                ]
+            }
+
+

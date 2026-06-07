@@ -16,6 +16,19 @@ def test_favorites_flow(client):
     assert "Mantı" not in res.json()["favorites"]
 
 
+def test_chef_specials_flow(client):
+    res = client.post("/chef-specials/add", json={"name": "Karnıyarık"})
+    assert res.status_code == 200
+    assert "Karnıyarık" in res.json()["chef_specials"]
+
+    res = client.get("/chef-specials")
+    assert "Karnıyarık" in res.json()["chef_specials"]
+
+    res = client.post("/chef-specials/remove", json={"name": "Karnıyarık"})
+    assert "Karnıyarık" not in res.json()["chef_specials"]
+
+
+
 def test_plan_invalid_day(client):
     res = client.post("/plan/add", json={"day": "InvalidDay", "meal": "Test"})
     assert res.status_code == 422

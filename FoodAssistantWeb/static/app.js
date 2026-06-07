@@ -2,6 +2,7 @@
 const S = {
   history: [],
   favorites: [],
+  chefSpecials: [],
   plan: {},
   days: [],
   preferences: {},
@@ -167,7 +168,7 @@ function renderFavorites() {
   list.innerHTML = '';
   const n = S.favorites.length;
   count.textContent = n;
-  badge.textContent = n > 0 ? ` (${n})` : '';
+  if (badge) badge.textContent = n > 0 ? ` (${n})` : '';
   empty.style.display = n === 0 ? 'block' : 'none';
   list.style.display  = n === 0 ? 'none'  : 'flex';
 
@@ -176,20 +177,31 @@ function renderFavorites() {
     item.className = 'fav-item';
     item.dataset.name = name;
     item.draggable = true;
+    const isChef = S.chefSpecials.includes(name);
     item.innerHTML = `
       <span class="drag-handle">☰</span>
       <span class="fav-name">${esc(name)}</span>
       <button class="fav-plan-btn plan-btn" title="Plana ekle">📅</button>
       <button class="fav-recipe-btn recipe-btn" title="Tarifi gör">📖</button>
+      <button class="fav-chef-btn chef-btn ${isChef ? 'added' : ''}" title="Şefin Spesyali">${isChef ? '👑' : '👨‍🍳'}</button>
       <button class="remove-btn" title="Kaldır">×</button>
     `;
     item.querySelector('.remove-btn').addEventListener('click', () => removeFavorite(name));
     item.querySelector('.fav-plan-btn').addEventListener('click', e => { e.stopPropagation(); openDayModal(name); });
     item.querySelector('.fav-recipe-btn').addEventListener('click', e => { e.stopPropagation(); openRecipeByName(name); });
+    item.querySelector('.fav-chef-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      toggleChef(name, e.currentTarget);
+    });
     item.addEventListener('dragstart', e => {
       e.dataTransfer.setData('text/plain', name);
       e.dataTransfer.effectAllowed = 'copy';
+      document.getElementById('fav-drop-zone').style.display = 'block';
+      document.getElementById('chef-drop-zone').style.display = 'block';
+    });
+    item.addEventListener('dragend', () => {
       document.getElementById('fav-drop-zone').style.display = 'none';
+      document.getElementById('chef-drop-zone').style.display = 'none';
     });
     list.appendChild(item);
   });
@@ -208,6 +220,65 @@ function renderFavorites() {
   });
 }
 
+// ── CHEF'S SPECIALS ────────────────────────────────────────────────────────
+function renderChefSpecials() {
+  const list  = document.getElementById('chef-list');
+  const empty = document.getElementById('chef-empty');
+  const count = document.getElementById('chef-count');
+  list.innerHTML = '';
+  const n = S.chefSpecials.length;
+  count.textContent = n;
+  empty.style.display = n === 0 ? 'block' : 'none';
+  list.style.display  = n === 0 ? 'none'  : 'flex';
+
+  S.chefSpecials.forEach(name => {
+    const item = document.createElement('div');
+    item.className = 'fav-item chef-special-item';
+    item.dataset.name = name;
+    item.draggable = true;
+    const isFav = S.favorites.includes(name);
+    item.innerHTML = `
+      <span class="drag-handle">☰</span>
+      <span class="fav-name">${esc(name)}</span>
+      <button class="fav-plan-btn plan-btn" title="Plana ekle">📅</button>
+      <button class="fav-recipe-btn recipe-btn" title="Tarifi gör">📖</button>
+      <button class="fav-star-btn add-btn ${isFav ? 'added' : ''}" title="Favorilere ekle/çıkar">${isFav ? '✅' : '⭐'}</button>
+      <button class="remove-btn" title="Kaldır">×</button>
+    `;
+    item.querySelector('.remove-btn').addEventListener('click', () => removeChefSpecial(name));
+    item.querySelector('.fav-plan-btn').addEventListener('click', e => { e.stopPropagation(); openDayModal(name); });
+    item.querySelector('.fav-recipe-btn').addEventListener('click', e => { e.stopPropagation(); openRecipeByName(name); });
+    item.querySelector('.fav-star-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      toggleFav(name, e.currentTarget);
+    });
+    item.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', name);
+      e.dataTransfer.effectAllowed = 'copy';
+      document.getElementById('fav-drop-zone').style.display = 'block';
+      document.getElementById('chef-drop-zone').style.display = 'block';
+    });
+    item.addEventListener('dragend', () => {
+      document.getElementById('fav-drop-zone').style.display = 'none';
+      document.getElementById('chef-drop-zone').style.display = 'none';
+    });
+    list.appendChild(item);
+  });
+
+  if (window._chefSort) window._chefSort.destroy();
+  window._chefSort = Sortable.create(list, {
+    animation: 180,
+    handle: '.drag-handle',
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    onEnd: async () => {
+      const newOrder = [...list.querySelectorAll('.chef-special-item')].map(el => el.dataset.name);
+      S.chefSpecials = newOrder;
+      await api('/chef-specials/reorder', { names: newOrder });
+    }
+  });
+}
+
 const dropZone = document.getElementById('fav-drop-zone');
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
@@ -219,11 +290,23 @@ dropZone.addEventListener('drop', async e => {
   if (name) await addFavorite(name);
 });
 
+const chefDropZone = document.getElementById('chef-drop-zone');
+chefDropZone.addEventListener('dragover', e => { e.preventDefault(); chefDropZone.classList.add('drag-over'); });
+chefDropZone.addEventListener('dragleave', () => chefDropZone.classList.remove('drag-over'));
+chefDropZone.addEventListener('drop', async e => {
+  e.preventDefault();
+  chefDropZone.classList.remove('drag-over');
+  chefDropZone.style.display = 'none';
+  const name = e.dataTransfer.getData('text/plain');
+  if (name) await addChefSpecial(name);
+});
+
 async function addFavorite(name) {
   if (S.favorites.includes(name)) { toast(`${name} zaten favorilerde`); return; }
   const res = await api('/favorites/add', { name });
   S.favorites = res.favorites;
   renderFavorites();
+  renderChefSpecials();
   toast(`⭐ ${name} eklendi`);
 }
 
@@ -231,7 +314,25 @@ async function removeFavorite(name) {
   const res = await api('/favorites/remove', { name });
   S.favorites = res.favorites;
   renderFavorites();
+  renderChefSpecials();
   toast(`🗑 ${name} kaldırıldı`);
+}
+
+async function addChefSpecial(name) {
+  if (S.chefSpecials.includes(name)) { toast(`${name} zaten şefin spesyallerinde`); return; }
+  const res = await api('/chef-specials/add', { name });
+  S.chefSpecials = res.chef_specials;
+  renderChefSpecials();
+  renderFavorites();
+  toast(`👨‍🍳 ${name} şefin spesyali yapıldı`);
+}
+
+async function removeChefSpecial(name) {
+  const res = await api('/chef-specials/remove', { name });
+  S.chefSpecials = res.chef_specials;
+  renderChefSpecials();
+  renderFavorites();
+  toast(`🗑 ${name} şefin spesyallerinden kaldırıldı`);
 }
 
 // ── ÖNER ───────────────────────────────────────────────────────────────────
@@ -302,7 +403,7 @@ function addMealCards(data) {
   wrapper.className = 'meal-card-wrapper';
   const intro = document.createElement('div');
   intro.className = 'meal-intro';
-  intro.textContent = '📖 tarif · ⭐ favori · 📅 plana ekle';
+  intro.textContent = '📖 tarif · ⭐ favori · 👨‍🍳 spesyal · 📅 plana ekle';
   wrapper.appendChild(intro);
 
   const grid = document.createElement('div');
@@ -338,14 +439,36 @@ function addMealCards(data) {
       planBtn.title = 'Plana ekle';
       planBtn.addEventListener('click', e => { e.stopPropagation(); openDayModal(name); });
 
-      const btn = document.createElement('button');
-      btn.className = 'add-btn' + (S.favorites.includes(name) ? ' added' : '');
-      btn.textContent = S.favorites.includes(name) ? '✅' : '⭐';
-      btn.addEventListener('click', async () => {
-        if (btn.classList.contains('added')) return;
-        await addFavorite(name);
-        btn.classList.add('added');
-        btn.textContent = '✅';
+      const favBtn = document.createElement('button');
+      favBtn.className = 'add-btn' + (S.favorites.includes(name) ? ' added' : '');
+      favBtn.textContent = S.favorites.includes(name) ? '✅' : '⭐';
+      favBtn.title = 'Favori';
+      favBtn.addEventListener('click', async () => {
+        if (S.favorites.includes(name)) {
+          await removeFavorite(name);
+          favBtn.classList.remove('added');
+          favBtn.textContent = '⭐';
+        } else {
+          await addFavorite(name);
+          favBtn.classList.add('added');
+          favBtn.textContent = '✅';
+        }
+      });
+
+      const chefBtn = document.createElement('button');
+      chefBtn.className = 'chef-btn' + (S.chefSpecials.includes(name) ? ' added' : '');
+      chefBtn.textContent = S.chefSpecials.includes(name) ? '👑' : '👨‍🍳';
+      chefBtn.title = 'Şefin Spesyali';
+      chefBtn.addEventListener('click', async () => {
+        if (S.chefSpecials.includes(name)) {
+          await removeChefSpecial(name);
+          chefBtn.classList.remove('added');
+          chefBtn.textContent = '👨‍🍳';
+        } else {
+          await addChefSpecial(name);
+          chefBtn.classList.add('added');
+          chefBtn.textContent = '👑';
+        }
       });
 
       item.addEventListener('dragstart', e => {
@@ -353,15 +476,18 @@ function addMealCards(data) {
         e.dataTransfer.effectAllowed = 'copy';
         item.classList.add('dragging');
         dropZone.style.display = 'block';
+        chefDropZone.style.display = 'block';
       });
       item.addEventListener('dragend', () => {
         item.classList.remove('dragging');
         dropZone.style.display = 'none';
+        chefDropZone.style.display = 'none';
       });
 
       actions.appendChild(recipeBtn);
       actions.appendChild(planBtn);
-      actions.appendChild(btn);
+      actions.appendChild(favBtn);
+      actions.appendChild(chefBtn);
       item.appendChild(nameEl);
       item.appendChild(actions);
       card.appendChild(item);
@@ -697,7 +823,7 @@ function hideRecipeForm() {
 function renderMyRecipes() {
   const badge = document.getElementById('myrecipes-badge');
   const n = S.myRecipes.length;
-  badge.textContent = n > 0 ? ` (${n})` : '';
+  if (badge) badge.textContent = n > 0 ? ` (${n})` : '';
   myRecipesList.innerHTML = '';
   myRecipesEmpty.style.display = n === 0 ? 'block' : 'none';
   myRecipesList.style.display = n === 0 ? 'none' : 'flex';
@@ -797,10 +923,50 @@ document.getElementById('save-prefs-btn').addEventListener('click', async () => 
   const res = await api('/preferences', prefs);
   S.preferences = res.preferences;
   toast('✅ Tercihler kaydedildi');
+  document.getElementById('settings-drawer').classList.remove('open');
+});
+
+// Settings Drawer Toggles
+const settingsDrawer = document.getElementById('settings-drawer');
+document.getElementById('header-settings-btn').addEventListener('click', () => {
+  settingsDrawer.classList.add('open');
+});
+document.getElementById('settings-close').addEventListener('click', () => {
+  settingsDrawer.classList.remove('open');
+});
+document.getElementById('settings-overlay').addEventListener('click', () => {
+  settingsDrawer.classList.remove('open');
 });
 
 
 // ── HOME FEED ──────────────────────────────────────────────────────────────
+window.openRecipe = openRecipeByName;
+window.addFav = addFavorite;
+
+window.toggleChef = async function(name, btn) {
+  if (S.chefSpecials.includes(name)) {
+    await removeChefSpecial(name);
+    btn.classList.remove('added');
+    btn.textContent = '👨‍🍳';
+  } else {
+    await addChefSpecial(name);
+    btn.classList.add('added');
+    btn.textContent = '👑';
+  }
+};
+
+window.toggleFav = async function(name, btn) {
+  if (S.favorites.includes(name)) {
+    await removeFavorite(name);
+    btn.classList.remove('added');
+    btn.textContent = '⭐';
+  } else {
+    await addFavorite(name);
+    btn.classList.add('added');
+    btn.textContent = '✅';
+  }
+};
+
 async function loadHomeFeed() {
   const featCont = document.getElementById('home-featured-container');
   const altCont = document.getElementById('home-alternatives-container');
@@ -808,50 +974,70 @@ async function loadHomeFeed() {
   featCont.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--muted);">Yükleniyor...</div>';
   altCont.innerHTML = '';
 
-  const res = await apiCall('/api/home-feed');
-  if (!res) return;
+  try {
+    const res = await api('/api/home-feed');
+    if (!res) throw new Error("Veri boş döndü");
 
-  const f = res.featured;
-  if (f) {
-    const badge = f.source === 'plan' ? '<span style="background: var(--accent); padding: 2px 8px; border-radius: 12px; font-size: 10px; margin-left: 10px;">Planda</span>' : '';
-    // Generate a quick dummy image based on name for visual effect
-    const imgUrl = "https://source.unsplash.com/800x600/?food,turkish," + encodeURIComponent(f.name);
-    
-    featCont.innerHTML = `
-      <div class="featured-card">
-        <img src="${imgUrl}" class="featured-img" onerror="this.src='https://source.unsplash.com/800x600/?meal'" alt="${f.name}">
-        <div class="featured-content">
-          <div class="featured-title">${f.name} ${badge}</div>
-          <div class="featured-desc">${f.description}</div>
-          <div class="featured-meta">
-            <span>⏱️ ${f.time}</span>
-            <span>💪 ${f.difficulty}</span>
-          </div>
-          <div class="featured-btn-row">
-            <button class="featured-btn" onclick="openRecipe('${f.name}')">Tarife Git</button>
-            <button class="icon-btn" style="background:rgba(255,255,255,0.2); border:none; color:white;" onclick="addFav('${f.name}')">⭐</button>
+    const f = res.featured;
+    if (f) {
+      const badge = f.source === 'plan' ? '<span style="background: var(--accent); padding: 2px 8px; border-radius: 12px; font-size: 10px; margin-left: 10px;">Planda</span>' : '';
+      const isFav = S.favorites.includes(f.name);
+      const isChef = S.chefSpecials.includes(f.name);
+      // Use Bing image search for food pictures
+      const imgUrl = "https://tse1.mm.bing.net/th?q=" + encodeURIComponent(f.name) + "+yemek&w=800&h=600&c=7";
+      
+      featCont.innerHTML = `
+        <div class="featured-card">
+          <img src="${imgUrl}" class="featured-img" onerror="this.src='https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800'" alt="${f.name}">
+          <div class="featured-content">
+            <div class="featured-title">${f.name} ${badge}</div>
+            <div class="featured-desc">${f.description}</div>
+            <div class="featured-meta">
+              <span>⏱️ ${f.time}</span>
+              <span>💪 ${f.difficulty}</span>
+            </div>
+            <div class="featured-btn-row">
+              <button class="featured-btn" onclick="openRecipe('${f.name}')">Tarife Git</button>
+              <button class="icon-btn fav-toggle-btn ${isFav ? 'added' : ''}" style="background:rgba(255,255,255,0.2); border:none; color:white;" onclick="event.stopPropagation(); toggleFav('${f.name}', this)">${isFav ? '✅' : '⭐'}</button>
+              <button class="icon-btn chef-toggle-btn ${isChef ? 'added' : ''}" style="background:rgba(255,255,255,0.2); border:none; color:white;" onclick="event.stopPropagation(); toggleChef('${f.name}', this)">${isChef ? '👑' : '👨‍🍳'}</button>
+            </div>
           </div>
         </div>
+      `;
+    }
+
+    if (res.alternatives && res.alternatives.length > 0) {
+      const listHtml = res.alternatives.map(a => {
+        const img = "https://tse1.mm.bing.net/th?q=" + encodeURIComponent(a.name) + "+yemek&w=150&h=150&c=7";
+        const isFav = S.favorites.includes(a.name);
+        const isChef = S.chefSpecials.includes(a.name);
+        return `
+        <div class="alt-card" onclick="openRecipe('${a.name}')">
+          <img src="${img}" class="alt-img" onerror="this.src='https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=150'">
+          <div class="alt-info">
+            <div class="alt-title">${a.name}</div>
+            <div class="alt-desc">${a.description}</div>
+            <div class="alt-meta"><span>⏱️ ${a.time}</span><span>💪 ${a.difficulty}</span></div>
+          </div>
+          <button class="icon-btn fav-toggle-btn ${isFav ? 'added' : ''}" style="width:32px;height:32px;background:none;border:none;margin:auto 0;" onclick="event.stopPropagation(); toggleFav('${a.name}', this)">${isFav ? '✅' : '⭐'}</button>
+          <button class="icon-btn chef-toggle-btn ${isChef ? 'added' : ''}" style="width:32px;height:32px;background:none;border:none;margin:auto 0;" onclick="event.stopPropagation(); toggleChef('${a.name}', this)">${isChef ? '👑' : '👨‍🍳'}</button>
+        </div>
+        `;
+      }).join('');
+      altCont.innerHTML = `<div class="alt-list">${listHtml}</div>`;
+    }
+  } catch (err) {
+    console.error("Home feed load failed:", err);
+    featCont.innerHTML = `
+      <div class="featured-card" style="padding: 24px; text-align: center; background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.15);">
+        <div style="font-size: 32px; margin-bottom: 12px;">⚠️</div>
+        <div style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">Bağlantı Sorunu</div>
+        <div style="font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.5;">
+          Öneriler yüklenirken bir sorun oluştu. API sınırına ulaşıldı veya sunucu yanıt vermiyor olabilir.
+        </div>
+        <button class="featured-btn" onclick="loadHomeFeed()" style="max-width: 160px; margin: 0 auto; display: block;">Tekrar Dene</button>
       </div>
     `;
-  }
-
-  if (res.alternatives && res.alternatives.length > 0) {
-    const listHtml = res.alternatives.map(a => {
-      const img = "https://source.unsplash.com/150x150/?food,turkish," + encodeURIComponent(a.name);
-      return `
-      <div class="alt-card" onclick="openRecipe('${a.name}')">
-        <img src="${img}" class="alt-img" onerror="this.src='https://source.unsplash.com/150x150/?food'">
-        <div class="alt-info">
-          <div class="alt-title">${a.name}</div>
-          <div class="alt-desc">${a.description}</div>
-          <div class="alt-meta"><span>⏱️ ${a.time}</span><span>💪 ${a.difficulty}</span></div>
-        </div>
-        <button class="icon-btn" style="width:32px;height:32px;background:none;border:none;margin:auto 0;" onclick="event.stopPropagation(); addFav('${a.name}')">⭐</button>
-      </div>
-      `;
-    }).join('');
-    altCont.innerHTML = `<div class="alt-list">${listHtml}</div>`;
   }
 }
 
@@ -863,7 +1049,7 @@ document.getElementById('home-search-input').addEventListener('keydown', (e) => 
     // Switch to Chat tab and send
     document.querySelector('.nav-item[data-tab="chat"]').click();
     document.getElementById('msg-input').value = val;
-    sendMessage();
+    send();
   }
 });
 
@@ -878,6 +1064,7 @@ async function loadInitialData() {
   initTheme();
   const tasks = [
     api('/favorites').then(r => { S.favorites = r.favorites; renderFavorites(); }),
+    api('/chef-specials').then(r => { S.chefSpecials = r.chef_specials; renderChefSpecials(); }),
     api('/plan').then(r => { S.plan = r.plan; S.days = r.days; renderWeekGrid(); }),
     api('/preferences').then(r => { S.preferences = r.preferences; renderSettingsForm(); }),
     api('/my-recipes').then(r => { S.myRecipes = r.recipes; renderMyRecipes(); }),

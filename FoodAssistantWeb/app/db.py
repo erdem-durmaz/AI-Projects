@@ -51,6 +51,12 @@ class CustomRecipe(Base):
     created_at = Column(String, nullable=False)
     updated_at = Column(String, nullable=False)
 
+class ChefSpecial(Base):
+    __tablename__ = "chef_specials"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    position = Column(Integer, default=0)
+
 @contextmanager
 def db_session():
     db = SessionLocal()
@@ -324,3 +330,29 @@ def db_delete_custom_recipe(recipe_id: int) -> bool:
             db.delete(recipe)
             return True
         return False
+
+def db_get_chef_specials() -> list[str]:
+    with db_session() as db:
+        specials = db.query(ChefSpecial).order_by(ChefSpecial.position.asc(), ChefSpecial.id.desc()).all()
+        return [s.name for s in specials]
+
+def db_add_chef_special(name: str):
+    with db_session() as db:
+        existing = db.query(ChefSpecial).filter(ChefSpecial.name == name).first()
+        if not existing:
+            from sqlalchemy.sql import func
+            max_pos = db.query(func.max(ChefSpecial.position)).scalar() or 0
+            db.add(ChefSpecial(name=name, position=max_pos + 1))
+
+def db_remove_chef_special(name: str):
+    with db_session() as db:
+        special = db.query(ChefSpecial).filter(ChefSpecial.name == name).first()
+        if special:
+            db.delete(special)
+
+def db_reorder_chef_specials(names: list):
+    with db_session() as db:
+        for i, name in enumerate(names):
+            special = db.query(ChefSpecial).filter(ChefSpecial.name == name).first()
+            if special:
+                special.position = i

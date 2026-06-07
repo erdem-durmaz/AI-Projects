@@ -30,6 +30,10 @@ from app.db import (
     db_set_preferences,
     db_update_custom_recipe,
     init_db,
+    db_add_chef_special,
+    db_get_chef_specials,
+    db_remove_chef_special,
+    db_reorder_chef_specials,
 )
 from app.llm import chat_completion, chat_stream, parse_meal_response, get_daily_suggestion
 from app.models import (
@@ -199,6 +203,29 @@ def reorder_favs(req: ReorderRequest):
     return {"ok": True}
 
 
+@app.get("/chef-specials")
+def get_chef_specials():
+    return {"chef_specials": db_get_chef_specials()}
+
+
+@app.post("/chef-specials/add")
+def add_chef_special_endpoint(req: FavRequest):
+    db_add_chef_special(req.name.strip())
+    return {"chef_specials": db_get_chef_specials()}
+
+
+@app.post("/chef-specials/remove")
+def remove_chef_special_endpoint(req: FavRequest):
+    db_remove_chef_special(req.name.strip())
+    return {"chef_specials": db_get_chef_specials()}
+
+
+@app.post("/chef-specials/reorder")
+def reorder_chef_specials_endpoint(req: ReorderRequest):
+    db_reorder_chef_specials(req.names)
+    return {"ok": True}
+
+
 @app.get("/api/home-feed")
 def api_home_feed():
     from datetime import datetime
@@ -225,7 +252,8 @@ def api_home_feed():
     
     prefs = db_get_preferences()
     favs = db_get_favorites()
-    suggestion = get_daily_suggestion(prefs, plan, favs)
+    chef_specials = db_get_chef_specials()
+    suggestion = get_daily_suggestion(prefs, plan, favs, chef_specials)
     return suggestion
 
 
