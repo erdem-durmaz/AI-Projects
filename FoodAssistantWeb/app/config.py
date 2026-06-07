@@ -9,6 +9,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "static"
 DB_PATH = BASE_DIR / "favorites.db"
 
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_PATH}")
+
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
 MODEL_NAME = os.environ.get("MODEL_NAME", "llama-3.3-70b-versatile")
