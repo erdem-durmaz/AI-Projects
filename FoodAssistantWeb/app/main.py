@@ -31,7 +31,7 @@ from app.db import (
     db_update_custom_recipe,
     init_db,
 )
-from app.llm import chat_completion, chat_stream, parse_meal_response
+from app.llm import chat_completion, chat_stream, parse_meal_response, get_daily_suggestion
 from app.models import (
     ChatRequest,
     CustomRecipeDeleteRequest,
@@ -197,6 +197,36 @@ def remove_fav(req: FavRequest):
 def reorder_favs(req: ReorderRequest):
     db_reorder_favorites(req.names)
     return {"ok": True}
+
+
+@app.get("/api/home-feed")
+def api_home_feed():
+    from datetime import datetime
+    today_idx = datetime.now().weekday()
+    today_name = DAYS[today_idx]
+    
+    plan = db_get_plan()
+    today_meals = plan.get(today_name, [])
+    
+    if today_meals:
+        return {
+            "featured": {
+                "name": today_meals[0],
+                "description": f"{today_name} planınızdaki yemek",
+                "time": "Plana ait",
+                "difficulty": "-",
+                "source": "plan"
+            },
+            "alternatives": [
+                {"name": m, "description": "Plandaki diğer seçim", "time": "-", "difficulty": "-"} 
+                for m in today_meals[1:]
+            ]
+        }
+    
+    prefs = db_get_preferences()
+    favs = db_get_favorites()
+    suggestion = get_daily_suggestion(prefs, plan, favs)
+    return suggestion
 
 
 @app.get("/plan")

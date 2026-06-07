@@ -217,3 +217,62 @@ Başka hiçbir şey yazma, sadece JSON döndür.
     result = llm.invoke([HumanMessage(content=prompt)]).content.strip()
     parsed = re.sub(r"```json|```", "", result).strip()
     return json.loads(parsed)
+
+
+def get_daily_suggestion(prefs: dict[str, str], weekly_plan: dict[str, list[str]], favorites: list[str]) -> dict:
+    llm = get_llm(temperature=0.7, max_tokens=800)
+    
+    plan_text = json.dumps(weekly_plan, ensure_ascii=False)
+    fav_text = ", ".join(favorites) if favorites else "Henüz favori yok"
+
+    prompt = f"""Kullanıcı için 'Bugünün Önerisi' olarak TEK bir ana yemek ve 2-3 alternatif yan yemek/farklı seçenek üret.
+SADECE aşağıdaki JSON formatında döndür.
+
+KULLANICI TERCİHLERİ:
+- Kişi sayısı: {prefs.get('person_count', '3')}
+- Öğün: {prefs.get('meal_type', 'Akşam yemeği')}
+- Tarz: {prefs.get('style', 'Ev yemeği')}
+- Tercihler: {prefs.get('preferences', '')}
+- İstenmeyenler: {prefs.get('dislikes', '')}
+
+HAFTALIK PLAN (Bu hafta seçilen yemekler):
+{plan_text}
+
+FAVORİ YEMEKLERİ:
+{fav_text}
+
+GÖREV ve KISITLAMALAR:
+1. Bugün için "featured" (Öne Çıkan) 1 yemek seç.
+   - Haftalık plandaki yemeklere benzemesin (örneğin planda tavuk varsa bugün balık veya sebze öner).
+   - Kullanıcının favorilerinden (FAVORİ YEMEKLERİ) BİRİNİ de seçebilirsin, veya tamamen yeni bir şey önerebilirsin.
+2. "alternatives" olarak 2 veya 3 farklı yemek daha ekle.
+3. SADECE JSON DÖNDÜR, asla başka metin yazma.
+
+İSTENEN JSON FORMATI:
+{{
+  "featured": {{
+    "name": "Yemek Adı",
+    "description": "Kısa iştah açıcı açıklama",
+    "time": "45 dk",
+    "difficulty": "Orta"
+  }},
+  "alternatives": [
+    {{
+      "name": "Alternatif 1",
+      "description": "Açıklama",
+      "time": "30 dk",
+      "difficulty": "Kolay"
+    }}
+  ]
+}}
+"""
+    response = llm.invoke([HumanMessage(content=prompt)]).content.strip()
+    parsed = re.sub(r"```json|```", "", response).strip()
+    try:
+        return json.loads(parsed)
+    except Exception as e:
+        logger.error(f"Daily suggestion parse error: {{e}}")
+        return {
+            "featured": {"name": "Günün Yemeği", "description": "Harika bir öneri", "time": "45 dk", "difficulty": "Orta"},
+            "alternatives": []
+        }

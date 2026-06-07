@@ -21,19 +21,31 @@
     <h1>Yemek Asistanı</h1>
     <div class="sub">Ne yiyelim bugün?</div>
   </div>
-  <div class="header-actions">
-    <button class="icon-btn" id="theme-btn" title="Tema değiştir">🌙</button>
-  </div>
 </header>
 
-<div class="tabs">
-  <div class="tab active" data-tab="chat">🍽️ Öner</div>
-  <div class="tab" data-tab="fav">📅 Plan <span id="fav-badge"></span></div>
-  <div class="tab" data-tab="myrecipes">📒 Tariflerim <span id="myrecipes-badge"></span></div>
-  <div class="tab" data-tab="settings">⚙️ Ayarlar</div>
+<div id="home-panel" class="panel active">
+  <div class="home-search-bar">
+    <div class="search-input-wrapper">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="home-search-input" placeholder="Tarif veya yemek ara...">
+    </div>
+  </div>
+  <div class="home-header">
+    <div class="greeting" id="home-greeting">Merhaba!</div>
+    <h2>Bugünün Önerileri</h2>
+  </div>
+  <div id="home-featured-container" class="home-section">
+    <!-- Featured meal injected here -->
+  </div>
+  <div class="home-section">
+    <h3 class="section-subtitle" style="font-size: 14px; font-weight: 700; color: var(--muted); margin: 20px 0 10px; padding: 0 16px;">Alternatifler</h3>
+    <div id="home-alternatives-container">
+      <!-- Alternative meals injected here -->
+    </div>
+  </div>
 </div>
 
-<div id="chat-panel" class="panel active">
+<div id="chat-panel" class="panel">
   <div id="messages">
     <div id="messages-empty" class="suggest-empty">
       <div class="icon">🍽️</div>
@@ -168,7 +180,30 @@
   </div>
 </div>
 
+<nav class="bottom-nav">
+  <div class="nav-item active" data-tab="home">
+    <div class="nav-icon">🧭</div>
+    <span>Keşfet</span>
+  </div>
+  <div class="nav-item" data-tab="chat">
+    <div class="nav-icon">💬</div>
+    <span>Asistan</span>
+  </div>
+  <div class="nav-item" data-tab="fav">
+    <div class="nav-icon">📅</div>
+    <span>Plan</span>
+  </div>
+  <div class="nav-item" data-tab="myrecipes">
+    <div class="nav-icon">📒</div>
+    <span>Tarifler</span>
+  </div>
+  <div class="nav-item" data-tab="settings">
+    <div class="nav-icon">⚙️</div>
+    <span>Ayarlar</span>
+  </div>
+</nav>
+
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-<script src="/static/app.js?v=5"></script>
+<script src="/static/app.js?v=6"></script>
 </body>
 </html>
